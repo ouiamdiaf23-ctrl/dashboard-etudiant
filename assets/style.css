@@ -1,0 +1,439 @@
+/* ============================================================
+   SUPMTI DASHBOARD — Style Élégant & Professionnel
+   Palette inspirée du logo : Teal #0B6E72, Blanc, Gris clair
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap');
+
+/* ─── Variables ─────────────────────────────────────────── */
+:root {
+  --teal:         #0B6E72;
+  --teal-mid:     #138A8F;
+  --teal-light:   #E6F4F5;
+  --accent:       #D9534F;
+  --bg:           #F8FAFA;
+  --surface:      #FFFFFF;
+  --border:       #DDE8E9;
+  --text:         #1C2B2C;
+  --text-muted:   #607D7E;
+  --shadow-sm:    0 2px 8px rgba(11,110,114,.08);
+  --shadow-md:    0 6px 20px rgba(11,110,114,.12);
+  --radius:       14px;
+  --radius-sm:    8px;
+}
+
+/* ─── Base ──────────────────────────────────────────────── */
+html, body, [class*="css"] {
+  font-family: 'Inter', sans-serif;
+  color: var(--text);
+}
+
+.stApp {
+  background: var(--bg);
+}
+
+/* Entrée douce de la page */
+.main .block-container {
+  padding: 2rem 2.5rem;
+  animation: pageIn .5s ease both;
+}
+
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Typographie ───────────────────────────────────────── */
+h1 {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--teal);
+  letter-spacing: -.5px;
+  margin-bottom: .25rem;
+}
+
+h2, h3 {
+  font-family: 'DM Sans', sans-serif;
+  color: var(--teal);
+  font-weight: 600;
+}
+
+p { color: var(--text-muted); line-height: 1.75; }
+
+/* ─── Sidebar ───────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+  background: var(--teal);
+  border-right: 1px solid rgba(255,255,255,.12);
+}
+
+/* Titres et labels sidebar */
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] .stMarkdown,
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+  color: rgba(255,255,255,.92) !important;
+  font-weight: 500;
+}
+
+/* Inputs de la sidebar — fond blanc, texte sombre */
+[data-testid="stSidebar"] input {
+  background: rgba(255,255,255,.96) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+  border: none !important;
+}
+
+[data-testid="stSidebar"] [data-baseweb="select"] > div {
+  background: rgba(255,255,255,.96) !important;
+  border: none !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+[data-testid="stSidebar"] [data-baseweb="select"] span,
+[data-testid="stSidebar"] [data-baseweb="select"] div {
+  color: var(--text) !important;
+}
+
+/* Tags multiselect */
+[data-baseweb="tag"] {
+  background: var(--teal-mid) !important;
+  color: white !important;
+  border-radius: 20px !important;
+}
+
+/* File uploader dans la sidebar */
+[data-testid="stSidebar"] [data-testid="stFileUploader"] {
+  background: rgba(255,255,255,.10);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+}
+
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+  background: rgba(255,255,255,.08) !important;
+  border: 2px dashed rgba(255,255,255,.35) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stFileUploader"] * {
+  color: rgba(255,255,255,.9) !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stFileUploader"] button {
+  background: rgba(255,255,255,.2) !important;
+  color: white !important;
+  border: 1px solid rgba(255,255,255,.4) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stFileUploader"] button:hover {
+  background: white !important;
+  color: var(--teal) !important;
+}
+
+/* Séparateur sidebar */
+[data-testid="stSidebar"] hr {
+  border-color: rgba(255,255,255,.15);
+}
+
+/* ─── Bouton principal ──────────────────────────────────── */
+.stButton > button {
+  background: var(--teal);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: .65rem 1.4rem;
+  font-size: .9rem;
+  font-weight: 600;
+  letter-spacing: .2px;
+  transition: background .25s, transform .2s, box-shadow .2s;
+  box-shadow: var(--shadow-sm);
+}
+
+.stButton > button:hover {
+  background: var(--teal-mid);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Bouton sidebar */
+[data-testid="stSidebar"] .stButton > button {
+  background: rgba(255,255,255,.18);
+  color: white;
+  border: 1px solid rgba(255,255,255,.35);
+  width: 100%;
+}
+
+[data-testid="stSidebar"] .stButton > button:hover {
+  background: white;
+  color: var(--teal);
+}
+
+/* ─── Bouton téléchargement ─────────────────────────────── */
+.stDownloadButton > button {
+  background: var(--teal-light);
+  color: var(--teal);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .6rem 1.2rem;
+  font-weight: 600;
+  font-size: .88rem;
+  transition: .25s;
+}
+
+.stDownloadButton > button:hover {
+  background: var(--teal);
+  color: white;
+  border-color: var(--teal);
+}
+
+/* ─── Inputs ────────────────────────────────────────────── */
+.stTextInput input,
+.stNumberInput input,
+textarea {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+  border: 1.5px solid var(--border) !important;
+  font-size: .9rem;
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.stTextInput input:focus,
+.stNumberInput input:focus,
+textarea:focus {
+  border-color: var(--teal) !important;
+  box-shadow: 0 0 0 3px rgba(11,110,114,.1) !important;
+  outline: none !important;
+}
+
+/* ─── Selectbox ─────────────────────────────────────────── */
+.stSelectbox div[data-baseweb="select"] > div {
+  background: var(--surface) !important;
+  border: 1.5px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  transition: border-color .2s;
+}
+
+.stSelectbox div[data-baseweb="select"] > div:hover {
+  border-color: var(--teal) !important;
+}
+
+/* ─── Slider ────────────────────────────────────────────── */
+.stSlider [data-baseweb="slider"] > div > div {
+  background: var(--teal) !important;
+}
+
+/* ─── Métriques KPI ─────────────────────────────────────── */
+[data-testid="metric-container"] {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.4rem 1.6rem;
+  box-shadow: var(--shadow-sm);
+  border-left: 4px solid var(--teal);
+  transition: transform .25s, box-shadow .25s;
+}
+
+[data-testid="metric-container"]:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+}
+
+[data-testid="metric-container"] label {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--text-muted) !important;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+}
+
+[data-testid="metric-container"] [data-testid="stMetricValue"] {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--teal) !important;
+}
+
+/* ─── Tabs ──────────────────────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {
+  gap: 6px;
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 0;
+}
+
+.stTabs [data-baseweb="tab"] {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding: .6rem 1.2rem;
+  font-size: .88rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color .2s, background .2s;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+  color: var(--teal);
+  background: var(--teal-light);
+}
+
+.stTabs [aria-selected="true"] {
+  background: var(--teal) !important;
+  color: white !important;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0 !important;
+  font-weight: 600 !important;
+}
+
+/* ─── Dataframe / Tableau ───────────────────────────────── */
+[data-testid="stDataFrame"] {
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+thead tr { background: var(--teal) !important; }
+thead th { color: white !important; font-weight: 600 !important; }
+tbody tr:nth-child(even) { background: #F3F9F9; }
+tbody tr:hover { background: var(--teal-light) !important; }
+
+/* ─── Expander ──────────────────────────────────────────── */
+.streamlit-expanderHeader {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  color: var(--teal);
+  padding: .75rem 1rem;
+}
+
+.streamlit-expanderContent {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  padding: 1rem;
+}
+
+/* ─── Messages ──────────────────────────────────────────── */
+.stSuccess {
+  background: #EAF7F0 !important;
+  border-left: 5px solid #2E8B57 !important;
+  border-radius: var(--radius-sm);
+}
+
+.stWarning {
+  background: #FFFBEA !important;
+  border-left: 5px solid #D4A017 !important;
+  border-radius: var(--radius-sm);
+}
+
+.stError {
+  background: #FEF0EF !important;
+  border-left: 5px solid var(--accent) !important;
+  border-radius: var(--radius-sm);
+}
+
+.stInfo {
+  background: var(--teal-light) !important;
+  border-left: 5px solid var(--teal) !important;
+  border-radius: var(--radius-sm);
+}
+
+/* ─── Graphiques Matplotlib ─────────────────────────────── */
+.element-container img {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ─── File uploader (zone principale) ──────────────────── */
+[data-testid="stFileUploaderDropzone"] {
+  background: var(--surface) !important;
+  border: 2px dashed var(--border) !important;
+  border-radius: var(--radius) !important;
+  transition: border-color .2s;
+}
+
+[data-testid="stFileUploaderDropzone"]:hover {
+  border-color: var(--teal) !important;
+  background: var(--teal-light) !important;
+}
+
+/* ─── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 20px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--teal-mid); }
+
+/* ─── Séparateurs ───────────────────────────────────────── */
+hr {
+  border: none;
+  height: 1px;
+  background: var(--border);
+  margin: 1.5rem 0;
+}
+
+/* ─── Logo image ────────────────────────────────────────── */
+img { border-radius: var(--radius-sm); }
+
+/* ─── Responsive ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .main .block-container { padding: 1rem; }
+  h1 { font-size: 1.5rem; }
+  [data-testid="metric-container"] { margin-bottom: 1rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* Supprimer le rectangle du logo */
+[data-testid="stImage"] img,
+.element-container img {
+    background: transparent !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+}
+
+/* Animation élégante */
+.main .block-container {
+    animation: elegantFade .7s cubic-bezier(.25,.46,.45,.94) both;
+}
+
+@keyframes elegantFade {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Bouton upload - couleur compatible avec le teal */
+[data-testid="stFileUploader"] button {
+    background: #0B6E72 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    transition: background .25s !important;
+}
+
+[data-testid="stFileUploader"] button:hover {
+    background: #D9534F !important;
+    color: white !important;
+}
+
+/* Sidebar bouton upload */
+[data-testid="stSidebar"] [data-testid="stFileUploader"] button {
+    background: rgba(255,255,255,.25) !important;
+    color: white !important;
+    border: 1px solid rgba(255,255,255,.5) !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stFileUploader"] button:hover {
+    background: #D9534F !important;
+    border-color: #D9534F !important;
+}
