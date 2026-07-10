@@ -12,11 +12,12 @@ import tempfile
 import os
 from fpdf import FPDF
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-with open("assets/style.css") as f:
-  st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+with open(os.path.join(BASE_DIR, "assets/style.css")) as f:
+    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-with open("assets/logo.png", "rb") as f:
+with open(os.path.join(BASE_DIR, "assets/logo.png"), "rb") as f:
     logo_b64 = base64.b64encode(f.read()).decode()
 
 
@@ -86,15 +87,19 @@ if avec_absences:
 
   if fichier1 is not None and fichier2 is not None:
 
-    if fichier1.name.endswith(".csv"):
-        df1 = pd.read_csv(fichier1)
-    else:
-        df1 = pd.read_excel(fichier1)
+    try:
+        if fichier1.name.endswith(".csv"):
+            df1 = pd.read_csv(fichier1)
+        else:
+            df1 = pd.read_excel(fichier1)
 
-    if fichier2.name.endswith(".csv"):
-        df2 = pd.read_csv(fichier2)
-    else:
-        df2 = pd.read_excel(fichier2)
+        if fichier2.name.endswith(".csv"):
+            df2 = pd.read_csv(fichier2)
+        else:
+            df2 = pd.read_excel(fichier2)
+    except Exception as e:
+        st.error(f"Impossible de lire un des fichiers : {e}")
+        st.stop()
 
     col_nom_df1 = st.sidebar.selectbox(
         "Choisir la colonne des noms dans le fichier notes :",
@@ -107,17 +112,84 @@ if avec_absences:
 
     #Fusion
     df = pd.merge(df1, df2, left_on=col_nom_df1, right_on=col_nom_df2)
-    #st.dataframe(df)
+
 
     col_abs = st.sidebar.selectbox(
         "Choisir la colonne qui représente l'absence :",
         df.columns
     )
 
+    colonnes_disponibles = [col for col in df.columns
+                            if col != col_nom_df1 and col != col_nom_df2]
+
     cols_notes = st.sidebar.multiselect(
         "Choisir les colonnes qui représentent les notes:",
-        df.columns
+        colonnes_disponibles
     )
+
+    # ── Nettoyage et validation des données ──────────────
+    # Convertir les colonnes en numérique
+    # les valeurs texte - NaN
+    for col in cols_notes:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    # Compter les cellules texte converties en NaN
+    nbr_texte = df[cols_notes].isnull().sum().sum()
+    if nbr_texte > 0:
+        st.sidebar.warning(f"{nbr_texte} cellule(s) contenant du texte détectée(s) dans les notes.")
+
+    remplacer = ""
+    if nbr_texte != 0:
+        remplacer = st.sidebar.selectbox(
+            "Comment souhaitez-vous traiter les valeurs manquantes dans les notes ?",
+            ['La moyen', 'remplacer par 0', 'Supprimer la ligne'],
+            key="strategie_notes"
+        )
+
+    if remplacer == "La moyen":
+        for col in cols_notes:
+            df[col] = df[col].fillna(df[col].mean())
+
+    elif remplacer == "remplacer par 0":
+        for col in cols_notes:
+            df[col] = df[col].fillna(0)
+
+    elif remplacer == "Supprimer la ligne":
+        df = df.dropna(subset=cols_notes)
+
+    # Nettoyage de la colonne d'absences
+    df[col_abs] = pd.to_numeric(df[col_abs], errors='coerce')
+
+    nbr_texte_abs = df[col_abs].isnull().sum()
+    if nbr_texte_abs > 0:
+        st.sidebar.warning(f"{nbr_texte_abs} cellule(s) contenant du texte détectée(s) dans la colonne des absences.")
+
+    remplacer_abs = ""
+    if nbr_texte_abs != 0:
+        remplacer_abs = st.sidebar.selectbox(
+            "Comment souhaitez-vous traiter les valeurs manquantes dans les absences ?",
+            ['La moyen', 'remplacer par 0', 'Supprimer la ligne'],
+            key="strategie_absences"
+        )
+
+    if remplacer_abs == "La moyen":
+        df[col_abs] = df[col_abs].fillna(df[col_abs].mean())
+
+    elif remplacer_abs == "remplacer par 0":
+        df[col_abs] = df[col_abs].fillna(0)
+
+    elif remplacer_abs == "Supprimer la ligne":
+        df = df.dropna(subset=[col_abs])
+
+    # Valeurs aberrantes (hors 0-20)
+    for col in cols_notes:
+        aberrantes = ((df[col] < 0) | (df[col] > 20)).sum()
+        if aberrantes > 0:
+            st.warning(f"{aberrantes} valeur(s) aberrante(s) dans « {col} » — remplacées par la médiane.")
+            median_val = df[(df[col] >= 0) & (df[col] <= 20)][col].median()
+            df[col] = df[col].apply(
+                lambda x: median_val if (x < 0 or x > 20) else x
+            )
 
     seuil = st.sidebar.number_input("Veuillez entrer le seuil de réussite: ")
     seuil_abs = st.sidebar.number_input("Veuillez entrer le seuil d'absence: ")
@@ -128,7 +200,7 @@ if avec_absences:
     if st.sidebar.button("Afficher"):
         st.session_state["Afficher_pred"] = True
 
-    if cols_notes and seuil and seuil_abs and st.session_state["Afficher_pred"]:
+    if cols_notes and seuil is not None and seuil_abs is not None and st.session_state["Afficher_pred"]:
 
       df["Moyenne"] = df[cols_notes].mean(axis=1)
 
@@ -136,14 +208,19 @@ if avec_absences:
       #st.dataframe(y)
       X = df[cols_notes + [col_abs]]
 
+      if y.nunique() < 2:
+          st.error("Impossible d'entraîner un modèle : tous les étudiants sont dans la même catégorie.")
+          st.stop()
+
       # Entrainement de modele
-      X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+      X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
       model = LogisticRegression()
       model.fit(X_train, y_train)
 
       # Prédiction
       y_pred = model.predict(X)
+      y_pred_test = model.predict(X_test)
 
       tab1, tab2, tab3, tab4 = st.tabs([
           "Résultats",
@@ -167,8 +244,8 @@ if avec_absences:
         df_risque = df_resultats[df_resultats["Prédiction"] == "Échec"]
         st.dataframe(df_risque)
 
-        precision = accuracy_score(y, y_pred)
-        st.metric("Précision du modèle", f"{round(precision * 100, 2)} %")
+        precision = accuracy_score(y_test, y_pred_test)
+        st.metric("Précision du modèle (sur les données de test)", f"{round(precision * 100, 2)} %")
 
       with tab2:
         st.subheader("Corrélation entre absences et notes par matière")
@@ -272,6 +349,13 @@ if avec_absences:
 
         if len(df_double_risque) > 0:
             st.error(f" {len(df_double_risque)} étudiant(s) nécessitent une intervention !")
+            csv_risque = df_double_risque.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="Télécharger la liste (format csv)",
+                data=csv_risque,
+                file_name="etudiants_a_risque.csv",
+                mime="text/csv"
+            )
         else:
             st.success("Aucun étudiant à double risque détecté !")
 
@@ -434,8 +518,6 @@ if avec_absences:
 
         # Sauvegarder la heatmap
         fig_heatmap, ax_h = plt.subplots(figsize=(10, 6))
-        import seaborn as sns
-
         sns.heatmap(df[cols_notes + [col_abs]].corr(), annot=True, cmap="RdYlGn", ax=ax_h)
         buffer_heat = io.BytesIO()
         fig_heatmap.savefig(buffer_heat, format="png", bbox_inches="tight", dpi=150)
@@ -490,19 +572,68 @@ if avec_absences:
             mime="application/pdf"
         )
 
+        plt.close(fig)
+        plt.close(fig1)
+        plt.close(fig2)
+
 else:
   if fichier1 is not None:
-    if fichier1.name.endswith(".csv"):
-      df = pd.read_csv(fichier1)
-    else:
-      df = pd.read_excel(fichier1)
+    try:
+        if fichier1.name.endswith(".csv"):
+            df = pd.read_csv(fichier1)
+        else:
+            df = pd.read_excel(fichier1)
+    except Exception as e:
+        st.error(f"Impossible de lire le fichier : {e}")
+        st.stop()
 
     colonne_nom = st.sidebar.selectbox("Quelle colonne représente les noms des étudiants ?", df.columns)
 
+    colonnes_disponibles = [col for col in df.columns if col != colonne_nom]
+
     cols_notes = st.sidebar.multiselect(
         "Choisir les colonnes qui représentent les notes:",
-        df.columns
+        colonnes_disponibles
     )
+
+    # ── Nettoyage et validation des données ──────────────
+
+    # Convertir les colonnes en numérique
+    # les valeurs texte → NaN automatiquement
+    for col in cols_notes:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    # Compter les cellules texte converties en NaN
+    nbr_texte = df[cols_notes].isnull().sum().sum()
+    if nbr_texte > 0:
+        st.sidebar.warning(f"{nbr_texte} cellule(s) contenant du texte détectée(s)")
+
+    # Valeurs manquantes (NaN originaux + textes convertis)
+    remplacer = ""
+    if nbr_texte != 0:
+        remplacer = st.sidebar.selectbox("Comment souhaitez-vous traiter les valeurs manquantes ?",
+                                             ['La moyen', 'remplacer par 0', 'Supprimer la ligne'])
+
+    if remplacer == "La moyen":
+        for col in cols_notes:
+            df[col] = df[col].fillna(df[col].mean())
+
+    elif remplacer == "remplacer par 0":
+        for col in cols_notes:
+            df[col] = df[col].fillna(0)
+
+    elif remplacer == "Supprimer la ligne":
+        df = df.dropna(subset=cols_notes)
+
+    # Valeurs aberrantes (hors 0-20)
+    for col in cols_notes:
+        aberrantes = ((df[col] < 0) | (df[col] > 20)).sum()
+        if aberrantes > 0:
+            st.warning(f"{aberrantes} valeur(s) aberrante(s) dans « {col} » — remplacées par la médiane.")
+            median_val = df[(df[col] >= 0) & (df[col] <= 20)][col].median()
+            df[col] = df[col].apply(
+                lambda x: median_val if (x < 0 or x > 20) else x
+            )
 
     seuil = st.sidebar.number_input(
     "Veuillez entrer le seuil de réussite: ",
@@ -517,7 +648,7 @@ else:
     if st.sidebar.button("Afficher"):
         st.session_state["Afficher_pred"] = True
 
-    if cols_notes and seuil and st.session_state["Afficher_pred"]:
+    if cols_notes and seuil is not None and st.session_state["Afficher_pred"]:
       df["Moyenne"] = df[cols_notes].mean(axis=1)
 
       y = (df["Moyenne"] >= seuil).astype(int)
@@ -579,8 +710,6 @@ else:
         pdf_res.set_fill_color(248, 245, 238)
         pdf_res.rect(15, y_boxes, 85, 35, "F")
         pdf_res.rect(110, y_boxes, 85, 35, "F")
-
-        nb_reussite = len(df_resultats[df_resultats.get("Statut", df_resultats.get("Prédiction", "")) == "Réussite"])
 
         # Encadré gauche
         pdf_res.set_xy(20, y_boxes + 5)
@@ -695,7 +824,7 @@ else:
 
         # Telechargement
         buffer2 = io.BytesIO()
-        fig2.savefig(buffer1, format="png")
+        fig2.savefig(buffer2, format="png")
         st.download_button(
             label="Télécharger le graphe (format png)",
             data=buffer2.getvalue(),
@@ -705,17 +834,20 @@ else:
 
 
       with tab3:
-          kmeans = KMeans(n_clusters=3, random_state=42)
+          n_clusters = min(3, df["Moyenne"].nunique())
+          kmeans = KMeans(n_clusters=n_clusters, random_state=42)
           kmeans.fit(df[["Moyenne"]])
           df["Groupe"] = kmeans.labels_
 
           moyennes_groupes = df.groupby("Groupe")["Moyenne"].mean().sort_values()
 
-          labels = {
-              moyennes_groupes.index[0]: "En difficulté",
-              moyennes_groupes.index[1]: "Moyen",
-              moyennes_groupes.index[2]: "Excellent"
-          }
+          if n_clusters == 3:
+              noms_profils = ["En difficulté", "Moyen", "Excellent"]
+          elif n_clusters == 2:
+              noms_profils = ["En difficulté", "Excellent"]
+          else:
+              noms_profils = ["Excellent"]
+          labels = {moyennes_groupes.index[i]: noms_profils[i] for i in range(n_clusters)}
 
           df["Profil"] = df["Groupe"].map(labels)
 
@@ -931,7 +1063,7 @@ else:
           pdf_complet.cell(0, 7, "Statistiques par groupe", ln=True)
           pdf_complet.ln(4)
 
-          # En-tête tableau groupes
+          # En-tete tableau groupes
           cols_groupe = list(stats_groupe.columns)
           larg = 180 // len(cols_groupe)
           pdf_complet.set_fill_color(11, 110, 114)
@@ -966,3 +1098,7 @@ else:
               file_name="rapport_predictif_sans_absences.pdf",
               mime="application/pdf"
           )
+
+          plt.close(fig1)
+          plt.close(fig2)
+          plt.close(fig3)
