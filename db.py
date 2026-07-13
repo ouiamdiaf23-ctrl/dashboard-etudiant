@@ -1,16 +1,8 @@
 import streamlit as st
 from sqlalchemy import text
-import mysql.connector
 
 def get_connection():
-    return mysql.connector.connect(
-        host=st.secrets["host"],
-        user=st.secrets["username"],
-        password=st.secrets["password"],
-        database=st.secrets["database"],
-        port=int(st.secrets["port"])
-    )
-
+    return st.connection("mysql", type="sql")
 
 
 def ajouter_etudiant(nom, classe=None):
