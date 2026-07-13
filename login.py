@@ -5,6 +5,12 @@ import os
 
 AUTH_DIR = os.path.dirname(os.path.abspath(__file__))
 
+st.write("Secrets :", st.secrets)
+st.write("Keys :", list(st.secrets.keys()))
+
+if "app_password_hash" not in st.secrets:
+    st.error("app_password_hash introuvable")
+    st.stop()
 
 def _charger_assets():
     with open(os.path.join(AUTH_DIR, "assets/style.css")) as f:
