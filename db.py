@@ -4,12 +4,13 @@ import mysql.connector
 
 def get_connection():
     return mysql.connector.connect(
-        host=st.secrets["tokaido.proxy.rlwy.net"],
-        user=st.secrets["root"],
-        password=st.secrets["ojSNoDdbMVSmhRgtZLVdKsEAapudRgZO"],
-        database=st.secrets["railway"],
-        port=int(st.secrets["36559"])
+        host=st.secrets["host"],
+        user=st.secrets["username"],
+        password=st.secrets["password"],
+        database=st.secrets["database"],
+        port=int(st.secrets["port"])
     )
+
 
 
 def ajouter_etudiant(nom, classe=None):
