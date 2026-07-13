@@ -5,6 +5,10 @@ import io
 from fpdf import FPDF
 import base64
 import tempfile, os
+from db import ajouter_etudiant, ajouter_matiere, ajouter_note ,ajouter_absence
+
+from login import check_password
+check_password()
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -113,6 +117,7 @@ if fichier is not None:
         elif remplacer == "Supprimer la ligne":
             df = df.dropna(subset=[colonne_valeur])
 
+
         # Telecharger les donnees nettoyes
         st.write(
             "Le fichier ci-dessous contient les données nettoyées (valeurs aberrantes et manquantes traitées). Cliquez pour le télécharger :")
@@ -124,6 +129,20 @@ if fichier is not None:
             file_name="moyennes.csv",
             mime="text/csv"
         )
+
+        #Base de donnee
+        date_eval = st.sidebar.date_input("Date de cette évaluation")
+        classe_etudiants = st.sidebar.text_input("Classe (ex: DS3A)")
+
+        if st.button("Enregistrer dans la base de données"):
+            ajouter_matiere(colonne_valeur)
+            for _, ligne in df.iterrows():
+                nom_etudiant = ligne[colonne_nom]
+                note = ligne[colonne_valeur]
+                ajouter_etudiant(nom_etudiant, classe_etudiants)
+                ajouter_note(nom_etudiant, colonne_valeur, note, date_eval)
+            st.success(f"{len(df)} étudiant(s) enregistré(s) dans la base.")
+
 
         seuil = st.sidebar.number_input("Veuillez entrer le seuil de réussite: ", min_value=0.0)
 
@@ -437,6 +456,17 @@ if fichier is not None:
             mime="text/csv"
         )
 
+        classe_etudiants = st.sidebar.text_input("Classe (ex: DS3A)", key="classe_absences")
+        date_releve = st.sidebar.date_input("Date de ce relevé d'absences", key="date_absences")
+
+        if st.button("Enregistrer les absences dans la base", key="enregistrer_absences"):
+            for _, ligne in df.iterrows():
+                nom_etudiant = ligne[colonne_nom]
+                nb_absences = ligne[colonne_valeur]
+                ajouter_etudiant(nom_etudiant, classe_etudiants)
+                ajouter_absence(nom_etudiant, nb_absences, date_releve)
+            st.success(f"{len(df)} étudiant(s) enregistré(s) dans la base.")
+
         # Affichage
         if "Afficher" not in st.session_state:
             st.session_state["Afficher"] = False
@@ -601,3 +631,8 @@ if fichier is not None:
 
             plt.close(fig1)
             plt.close(fig2)
+
+
+if st.sidebar.button("Déconnexion"):
+    st.session_state["mot_de_passe_correct"] = False
+    st.rerun()

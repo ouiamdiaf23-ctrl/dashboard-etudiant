@@ -11,6 +11,9 @@ import io
 import tempfile
 import os
 from fpdf import FPDF
+from db import recuperer_classes, recuperer_dates_classe, recuperer_donnees_prediction, ajouter_prediction, ajouter_etudiant
+from login import check_password
+check_password()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -52,837 +55,324 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
+source = st.sidebar.radio("Source des données", ["Fichier (upload)", "Base de données"])
 
-fichier1 = st.sidebar.file_uploader(
-        "Déposer le fichier des notes: ",
-        type=["csv", "xlsx"],
-        key="fichier_notes"
-    )
-
-if fichier1 is None:
-    st.markdown("""
-    <div style='text-align:center; padding: 3rem 1rem; color: #607D7E;'>
-        <h3 style='color: #0B6E72; margin-bottom: .5rem;'>Commencez par déposer un fichier</h3>
-        <p style='font-size: .95rem;'>
-            Utilisez le menu latéral pour choisir le type de données<br>
-            et déposer votre fichier CSV ou Excel.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-avec_absences = st.sidebar.checkbox("J'ai un fichier d'absences")
-if "dernier_mode" not in st.session_state:
-    st.session_state["dernier_mode"] = avec_absences
-
-if avec_absences != st.session_state["dernier_mode"]:
-    st.session_state["Afficher_pred"] = False
-    st.session_state["dernier_mode"] = avec_absences
-
-if avec_absences:
-  fichier2 = st.sidebar.file_uploader(
-        "Déposer le fichier des absences: ",
-        type=["csv", "xlsx"],
-        key="fichier_absences"
+if source == "Fichier (upload)":
+  fichier1 = st.sidebar.file_uploader(
+          "Déposer le fichier des notes: ",
+          type=["csv", "xlsx"],
+          key="fichier_notes"
       )
 
-  if fichier1 is not None and fichier2 is not None:
+  if fichier1 is None:
+      st.markdown("""
+      <div style='text-align:center; padding: 3rem 1rem; color: #607D7E;'>
+          <h3 style='color: #0B6E72; margin-bottom: .5rem;'>Commencez par déposer un fichier</h3>
+          <p style='font-size: .95rem;'>
+              Utilisez le menu latéral pour choisir le type de données<br>
+              et déposer votre fichier CSV ou Excel.
+          </p>
+      </div>
+      """, unsafe_allow_html=True)
 
-    try:
-        if fichier1.name.endswith(".csv"):
-            df1 = pd.read_csv(fichier1)
-        else:
-            df1 = pd.read_excel(fichier1)
+  avec_absences = st.sidebar.checkbox("J'ai un fichier d'absences")
+  if "dernier_mode" not in st.session_state:
+      st.session_state["dernier_mode"] = avec_absences
 
-        if fichier2.name.endswith(".csv"):
-            df2 = pd.read_csv(fichier2)
-        else:
-            df2 = pd.read_excel(fichier2)
-    except Exception as e:
-        st.error(f"Impossible de lire un des fichiers : {e}")
-        st.stop()
+  if avec_absences != st.session_state["dernier_mode"]:
+      st.session_state["Afficher_pred"] = False
+      st.session_state["dernier_mode"] = avec_absences
 
-    col_nom_df1 = st.sidebar.selectbox(
-        "Choisir la colonne des noms dans le fichier notes :",
-        df1.columns
-    )
-    col_nom_df2 = st.sidebar.selectbox(
-        "Choisir la colonne des noms dans le fichier absences :",
-        df2.columns
-    )
-
-    #Fusion
-    df = pd.merge(df1, df2, left_on=col_nom_df1, right_on=col_nom_df2)
-
-
-    col_abs = st.sidebar.selectbox(
-        "Choisir la colonne qui représente l'absence :",
-        df.columns
-    )
-
-    colonnes_disponibles = [col for col in df.columns
-                            if col != col_nom_df1 and col != col_nom_df2]
-
-    cols_notes = st.sidebar.multiselect(
-        "Choisir les colonnes qui représentent les notes:",
-        colonnes_disponibles
-    )
-
-    # ── Nettoyage et validation des données ──────────────
-    # Convertir les colonnes en numérique
-    # les valeurs texte - NaN
-    for col in cols_notes:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-
-    # Compter les cellules texte converties en NaN
-    nbr_texte = df[cols_notes].isnull().sum().sum()
-    if nbr_texte > 0:
-        st.sidebar.warning(f"{nbr_texte} cellule(s) contenant du texte détectée(s) dans les notes.")
-
-    remplacer = ""
-    if nbr_texte != 0:
-        remplacer = st.sidebar.selectbox(
-            "Comment souhaitez-vous traiter les valeurs manquantes dans les notes ?",
-            ['La moyen', 'remplacer par 0', 'Supprimer la ligne'],
-            key="strategie_notes"
+  if avec_absences:
+    fichier2 = st.sidebar.file_uploader(
+          "Déposer le fichier des absences: ",
+          type=["csv", "xlsx"],
+          key="fichier_absences"
         )
 
-    if remplacer == "La moyen":
-        for col in cols_notes:
-            df[col] = df[col].fillna(df[col].mean())
+    if fichier1 is not None and fichier2 is not None:
 
-    elif remplacer == "remplacer par 0":
-        for col in cols_notes:
-            df[col] = df[col].fillna(0)
+      try:
+          if fichier1.name.endswith(".csv"):
+              df1 = pd.read_csv(fichier1)
+          else:
+              df1 = pd.read_excel(fichier1)
 
-    elif remplacer == "Supprimer la ligne":
-        df = df.dropna(subset=cols_notes)
-
-    # Nettoyage de la colonne d'absences
-    df[col_abs] = pd.to_numeric(df[col_abs], errors='coerce')
-
-    nbr_texte_abs = df[col_abs].isnull().sum()
-    if nbr_texte_abs > 0:
-        st.sidebar.warning(f"{nbr_texte_abs} cellule(s) contenant du texte détectée(s) dans la colonne des absences.")
-
-    remplacer_abs = ""
-    if nbr_texte_abs != 0:
-        remplacer_abs = st.sidebar.selectbox(
-            "Comment souhaitez-vous traiter les valeurs manquantes dans les absences ?",
-            ['La moyen', 'remplacer par 0', 'Supprimer la ligne'],
-            key="strategie_absences"
-        )
-
-    if remplacer_abs == "La moyen":
-        df[col_abs] = df[col_abs].fillna(df[col_abs].mean())
-
-    elif remplacer_abs == "remplacer par 0":
-        df[col_abs] = df[col_abs].fillna(0)
-
-    elif remplacer_abs == "Supprimer la ligne":
-        df = df.dropna(subset=[col_abs])
-
-    # Valeurs aberrantes (hors 0-20)
-    for col in cols_notes:
-        aberrantes = ((df[col] < 0) | (df[col] > 20)).sum()
-        if aberrantes > 0:
-            st.warning(f"{aberrantes} valeur(s) aberrante(s) dans « {col} » — remplacées par la médiane.")
-            median_val = df[(df[col] >= 0) & (df[col] <= 20)][col].median()
-            df[col] = df[col].apply(
-                lambda x: median_val if (x < 0 or x > 20) else x
-            )
-
-    seuil = st.sidebar.number_input("Veuillez entrer le seuil de réussite: ")
-    seuil_abs = st.sidebar.number_input("Veuillez entrer le seuil d'absence: ")
-
-    if "Afficher_pred" not in st.session_state:
-        st.session_state["Afficher_pred"] = False
-
-    if st.sidebar.button("Afficher"):
-        st.session_state["Afficher_pred"] = True
-
-    if cols_notes and seuil is not None and seuil_abs is not None and st.session_state["Afficher_pred"]:
-
-      df["Moyenne"] = df[cols_notes].mean(axis=1)
-
-      y = ((df["Moyenne"] >= seuil) & (df[col_abs] <= seuil_abs)).astype(int)
-      #st.dataframe(y)
-      X = df[cols_notes + [col_abs]]
-
-      if y.nunique() < 2:
-          st.error("Impossible d'entraîner un modèle : tous les étudiants sont dans la même catégorie.")
+          if fichier2.name.endswith(".csv"):
+              df2 = pd.read_csv(fichier2)
+          else:
+              df2 = pd.read_excel(fichier2)
+      except Exception as e:
+          st.error(f"Impossible de lire un des fichiers : {e}")
           st.stop()
 
-      # Entrainement de modele
-      X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-
-      model = LogisticRegression()
-      model.fit(X_train, y_train)
-
-      # Prédiction
-      y_pred = model.predict(X)
-      y_pred_test = model.predict(X_test)
-
-      tab1, tab2, tab3, tab4 = st.tabs([
-          "Résultats",
-          "Corrélation",
-          "Performances",
-          "Risques"
-      ])
-
-      with tab1:
-        df_resultats = pd.DataFrame({
-              "Nom": df[col_nom_df1],
-              **{col: df[col] for col in cols_notes},
-              "Moyenne": df["Moyenne"],
-              "Absences": df[col_abs],
-              "Prédiction": ["Réussite" if p == 1 else "Échec" for p in y_pred]
-        })
-
-        st.dataframe(df_resultats)
-
-        st.subheader(" Étudiants à risque d'échec :")
-        df_risque = df_resultats[df_resultats["Prédiction"] == "Échec"]
-        st.dataframe(df_risque)
-
-        precision = accuracy_score(y_test, y_pred_test)
-        st.metric("Précision du modèle (sur les données de test)", f"{round(precision * 100, 2)} %")
-
-      with tab2:
-        st.subheader("Corrélation entre absences et notes par matière")
-
-        with st.expander("Comment lire ce graphique ?"):
-            st.write("""
-            **La heatmap de corrélation** montre la relation entre chaque paire de colonnes :
-
-          🔴 **Proche de +1** → Forte corrélation positive : quand l'une augmente, l'autre augmente aussi
-
-          🔵 **Proche de -1** → Forte corrélation négative : quand l'une augmente, l'autre diminue
-
-          ⬜ **Proche de 0** → Pas de corrélation : les deux colonnes sont indépendantes
-
-          **Exemple concret :**
-          Si la case "Absences / Maths" affiche **-0.8**, cela signifie que plus un étudiant est absent, 
-          moins sa note en Maths est bonne. C'est une forte corrélation négative !
-
-          **Ce qu'il faut regarder :**
-          → Les cases entre **Absences** et chaque matière
-          → Plus la valeur est proche de **-1**, plus les absences impactent cette matière
-          """)
-
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.heatmap(
-          df[cols_notes + [col_abs]].corr(),
-          annot=True,
-          cmap="coolwarm",
-          ax=ax
-        )
-        st.pyplot(fig)
-
-        #Telecharger
-        buffer = io.BytesIO()
-        fig.savefig(buffer, format="png")
-        st.download_button(
-            label="Télécharger le graphe (format png)",
-            data=buffer.getvalue(),
-            file_name="Heatmap.png",
-            mime="image/png"
-        )
-
-      with tab3:
-        st.subheader("Comparaison des moyennes par matière")
-
-        moyennes_par_matiere = df[cols_notes].mean()
-        matiere_faible = moyennes_par_matiere.idxmin()
-
-        st.metric("Matière la plus faible", matiere_faible,
-                f"{round(moyennes_par_matiere[matiere_faible], 2)}/20")
-
-        #hist
-        fig1, ax = plt.subplots()
-        ax.barh(moyennes_par_matiere.index, moyennes_par_matiere.values, color='#0B6E72', height=0.2)
-        ax.set_xlabel("Moyenne")
-        ax.axvline(x=seuil, color='red', linestyle='--', label=f'Seuil ({seuil})')
-        ax.legend()
-        fig1.tight_layout()
-        st.pyplot(fig1)
-
-        buffer = io.BytesIO()
-        fig1.savefig(buffer, format="png")
-        st.download_button(
-            label="Télécharger le graphe (format png)",
-            data=buffer.getvalue(),
-            file_name="Histogramme1.png",
-            mime="image/png"
-        )
-
-
-        echecs_par_matiere = (df[cols_notes] < seuil).sum()
-        matiere_plus_dechec = echecs_par_matiere.idxmax()
-        st.metric("Matière avec le plus d'échecs", matiere_plus_dechec,
-              f"{echecs_par_matiere[matiere_plus_dechec]} étudiants en échec")
-
-        #hist
-        fig2, ax = plt.subplots()
-        ax.barh(echecs_par_matiere.index, echecs_par_matiere.values, color='#E63946', height=0.2)
-        ax.set_xlabel("Nombre d'échecs")
-        fig2.tight_layout()
-        st.pyplot(fig2)
-
-        buffer = io.BytesIO()
-        fig2.savefig(buffer, format="png")
-        st.download_button(
-            label="Télécharger le graphe (format png)",
-            data=buffer.getvalue(),
-            file_name="Histogramme2.png",
-            mime="image/png"
-        )
-
-
-      with tab4:
-        st.subheader("Étudiants à double risque")
-        df_double_risque = df[
-          (df["Moyenne"] < seuil) & (df[col_abs] > seuil_abs)
-          ][[col_nom_df1, "Moyenne", col_abs]]
-
-        st.metric("Nombre d'étudiants à risque", len(df_double_risque))
-        st.dataframe(df_double_risque)
-
-        if len(df_double_risque) > 0:
-            st.error(f" {len(df_double_risque)} étudiant(s) nécessitent une intervention !")
-            csv_risque = df_double_risque.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                label="Télécharger la liste (format csv)",
-                data=csv_risque,
-                file_name="etudiants_a_risque.csv",
-                mime="text/csv"
-            )
-        else:
-            st.success("Aucun étudiant à double risque détecté !")
-
-        st.markdown("---")
-        st.subheader("Rapport complet:")
-
-        pdf_complet = FPDF()
-        pdf_complet.set_auto_page_break(True, 15)
-        pdf_complet.add_page()
-
-        # ── Header ──────────────────────────────────────────
-        pdf_complet.set_fill_color(184, 187, 146)
-        pdf_complet.rect(0, 0, 210, 60, "F")
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-            tmp.write(base64.b64decode(logo_b64))
-            tmp_logo = tmp.name
-        pdf_complet.image(tmp_logo, x=140, y=0, w=50)
-        os.unlink(tmp_logo)
-        pdf_complet.set_draw_color(255, 255, 255)
-        pdf_complet.set_line_width(0.4)
-        pdf_complet.line(130, 8, 130, 52)
-        pdf_complet.set_text_color(255, 255, 255)
-        pdf_complet.set_font("Helvetica", "B", 30)
-        pdf_complet.set_xy(15, 12)
-        pdf_complet.multi_cell(110, 12, "Rapport\nPrédictif")
-        pdf_complet.set_font("Helvetica", "", 13)
-        pdf_complet.set_xy(15, 40)
-        pdf_complet.cell(100, 8, f"Seuil notes : {seuil}/20 | Seuil absences : {seuil_abs}")
-
-        # ── Encadrés statistiques ────────────────────────────
-        pdf_complet.ln(35)
-        y_boxes = pdf_complet.get_y()
-        pdf_complet.set_fill_color(248, 245, 238)
-        pdf_complet.rect(15, y_boxes, 85, 35, "F")
-        pdf_complet.rect(110, y_boxes, 85, 35, "F")
-        nb_reussite = len(df_resultats[df_resultats["Prédiction"] == "Réussite"])
-        nb_echec = len(df_resultats[df_resultats["Prédiction"] == "Échec"])
-
-        pdf_complet.set_xy(20, y_boxes + 5)
-        pdf_complet.set_font("Helvetica", "", 9)
-        pdf_complet.set_text_color(100, 100, 100)
-        pdf_complet.cell(75, 5, "NOMBRE D'ÉTUDIANTS", ln=True)
-        pdf_complet.set_xy(20, y_boxes + 12)
-        pdf_complet.set_font("Helvetica", "B", 22)
-        pdf_complet.set_text_color(11, 110, 114)
-        pdf_complet.cell(75, 10, str(len(df)), ln=True)
-        pdf_complet.set_xy(20, y_boxes + 24)
-        pdf_complet.set_font("Helvetica", "", 9)
-        pdf_complet.set_text_color(100, 100, 100)
-        pdf_complet.cell(75, 5, f"Réussite : {nb_reussite} | Échec : {nb_echec}")
-
-        pdf_complet.set_xy(115, y_boxes + 5)
-        pdf_complet.set_font("Helvetica", "", 9)
-        pdf_complet.set_text_color(100, 100, 100)
-        pdf_complet.cell(75, 5, "MOYENNE GÉNÉRALE", ln=True)
-        pdf_complet.set_xy(115, y_boxes + 12)
-        pdf_complet.set_font("Helvetica", "B", 22)
-        pdf_complet.set_text_color(217, 83, 79)
-        pdf_complet.cell(75, 10, str(round(df["Moyenne"].mean(), 2)), ln=True)
-        pdf_complet.set_xy(115, y_boxes + 24)
-        pdf_complet.set_font("Helvetica", "", 9)
-        pdf_complet.set_text_color(100, 100, 100)
-        pdf_complet.cell(75, 5, f"Seuil : {seuil}/20")
-        pdf_complet.ln(45)
-
-        # ── Description ──────────────────────────────────────
-        pdf_complet.set_text_color(40, 40, 40)
-        pdf_complet.set_font("Helvetica", "B", 20)
-        pdf_complet.cell(0, 12, "À propos du rapport", ln=True)
-        pdf_complet.ln(3)
-        pdf_complet.set_font("Helvetica", "", 11)
-        pdf_complet.multi_cell(0, 7,
-                               "Ce rapport présente une analyse prédictive des performances étudiantes "
-                               "basée sur les notes par matière. Il inclut les résultats individuels, "
-                               "les performances par matière et la classification des étudiants par profil."
-                               )
-        pdf_complet.ln(10)
-
-        # ── Page 2 : Résultats ────────────────────────────────
-        pdf_complet.add_page()
-        pdf_complet.set_fill_color(11, 110, 114)
-        pdf_complet.rect(0, 0, 210, 6, "F")
-        pdf_complet.ln(12)
-        pdf_complet.set_text_color(40, 40, 40)
-        pdf_complet.set_font("Helvetica", "B", 16)
-        pdf_complet.cell(0, 10, "Résultats & Prédiction", ln=True)
-        pdf_complet.set_draw_color(220, 220, 220)
-        pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
-        pdf_complet.ln(8)
-
-        colonnes_res = list(df_resultats.columns)
-        largeur_col = 180 // len(colonnes_res)
-        pdf_complet.set_fill_color(11, 110, 114)
-        pdf_complet.set_text_color(255, 255, 255)
-        pdf_complet.set_font("Helvetica", "B", 8)
-        for col in colonnes_res:
-            pdf_complet.cell(largeur_col, 8, str(col)[:15], border=1, fill=True)
-        pdf_complet.ln()
-        pdf_complet.set_font("Helvetica", "", 8)
-        for i, row in df_resultats.iterrows():
-            if row.get("Prédiction") == "Réussite":
-                pdf_complet.set_fill_color(230, 244, 245)
-                pdf_complet.set_text_color(11, 110, 114)
-            else:
-                pdf_complet.set_fill_color(255, 240, 240)
-                pdf_complet.set_text_color(217, 83, 79)
-            for val in row:
-                pdf_complet.cell(largeur_col, 7,
-                                 str(round(val, 2) if isinstance(val, float) else val)[:15],
-                                 border=1, fill=True)
-            pdf_complet.ln()
-
-        # ── Page 3 : Performances par matière ────────────────
-        pdf_complet.add_page()
-        pdf_complet.set_fill_color(11, 110, 114)
-        pdf_complet.rect(0, 0, 210, 6, "F")
-        pdf_complet.ln(12)
-        pdf_complet.set_text_color(40, 40, 40)
-        pdf_complet.set_font("Helvetica", "B", 16)
-        pdf_complet.cell(0, 10, "Performances par matière", ln=True)
-        pdf_complet.set_draw_color(220, 220, 220)
-        pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
-        pdf_complet.ln(8)
-
-        buffer_m = io.BytesIO()
-        fig1.savefig(buffer_m, format="png", bbox_inches="tight", dpi=150)
-        buffer_m.seek(0)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-            tmp.write(buffer_m.read())
-            tmp_m = tmp.name
-        pdf_complet.set_font("Helvetica", "B", 11)
-        pdf_complet.set_text_color(50, 50, 50)
-        pdf_complet.cell(0, 7, "Moyenne par matière", ln=True)
-        pdf_complet.image(tmp_m, x=15, w=180)
-        os.unlink(tmp_m)
-        pdf_complet.ln(8)
-
-        buffer_e = io.BytesIO()
-        fig2.savefig(buffer_e, format="png", bbox_inches="tight", dpi=150)
-        buffer_e.seek(0)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-            tmp.write(buffer_e.read())
-            tmp_e = tmp.name
-        pdf_complet.set_font("Helvetica", "B", 11)
-        pdf_complet.cell(0, 7, "Nombre d'échecs par matière", ln=True)
-        pdf_complet.image(tmp_e, x=15, w=180)
-        os.unlink(tmp_e)
-
-        # ── Page 4 : Corrélation ─────────────────────────────
-        pdf_complet.add_page()
-        pdf_complet.set_fill_color(11, 110, 114)
-        pdf_complet.rect(0, 0, 210, 6, "F")
-        pdf_complet.ln(12)
-        pdf_complet.set_text_color(40, 40, 40)
-        pdf_complet.set_font("Helvetica", "B", 16)
-        pdf_complet.cell(0, 10, "Corrélation absences / notes", ln=True)
-        pdf_complet.set_draw_color(220, 220, 220)
-        pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
-        pdf_complet.ln(8)
-
-        # Sauvegarder la heatmap
-        fig_heatmap, ax_h = plt.subplots(figsize=(10, 6))
-        sns.heatmap(df[cols_notes + [col_abs]].corr(), annot=True, cmap="RdYlGn", ax=ax_h)
-        buffer_heat = io.BytesIO()
-        fig_heatmap.savefig(buffer_heat, format="png", bbox_inches="tight", dpi=150)
-        buffer_heat.seek(0)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-            tmp.write(buffer_heat.read())
-            tmp_heat = tmp.name
-        pdf_complet.image(tmp_heat, x=15, w=180)
-        os.unlink(tmp_heat)
-        plt.close(fig_heatmap)
-
-        # ── Page 5 : Étudiants à double risque ───────────────
-        pdf_complet.add_page()
-        pdf_complet.set_fill_color(11, 110, 114)
-        pdf_complet.rect(0, 0, 210, 6, "F")
-        pdf_complet.ln(12)
-        pdf_complet.set_text_color(40, 40, 40)
-        pdf_complet.set_font("Helvetica", "B", 16)
-        pdf_complet.cell(0, 10, "Étudiants à double risque", ln=True)
-        pdf_complet.set_draw_color(220, 220, 220)
-        pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
-        pdf_complet.ln(8)
-
-        if len(df_double_risque) > 0:
-            cols_risque = list(df_double_risque.columns)
-            larg_r = 180 // len(cols_risque)
-            pdf_complet.set_fill_color(11, 110, 114)
-            pdf_complet.set_text_color(255, 255, 255)
-            pdf_complet.set_font("Helvetica", "B", 9)
-            for col in cols_risque:
-                pdf_complet.cell(larg_r, 8, str(col)[:20], border=1, fill=True)
-            pdf_complet.ln()
-            pdf_complet.set_font("Helvetica", "", 9)
-            for i, row in df_double_risque.iterrows():
-                pdf_complet.set_fill_color(255, 240, 240)
-                pdf_complet.set_text_color(217, 83, 79)
-                for val in row:
-                    pdf_complet.cell(larg_r, 7,
-                                     str(round(val, 2) if isinstance(val, float) else val)[:20],
-                                     border=1, fill=True)
-                    pdf_complet.ln()
-        else:
-            pdf_complet.set_font("Helvetica", "", 11)
-            pdf_complet.set_text_color(11, 110, 114)
-            pdf_complet.cell(0, 10, "Aucun étudiant à double risque détecté.", ln=True)
-
-        pdf_bytes_complet = bytes(pdf_complet.output())
-        st.download_button(
-            label="Télécharger le rapport complet (PDF)",
-            data=pdf_bytes_complet,
-            file_name="rapport_predictif_avec_absences.pdf",
-            mime="application/pdf"
-        )
-
-        plt.close(fig)
-        plt.close(fig1)
-        plt.close(fig2)
-
-else:
-  if fichier1 is not None:
-    try:
-        if fichier1.name.endswith(".csv"):
-            df = pd.read_csv(fichier1)
-        else:
-            df = pd.read_excel(fichier1)
-    except Exception as e:
-        st.error(f"Impossible de lire le fichier : {e}")
-        st.stop()
-
-    colonne_nom = st.sidebar.selectbox("Quelle colonne représente les noms des étudiants ?", df.columns)
-
-    colonnes_disponibles = [col for col in df.columns if col != colonne_nom]
-
-    cols_notes = st.sidebar.multiselect(
-        "Choisir les colonnes qui représentent les notes:",
-        colonnes_disponibles
-    )
-
-    # ── Nettoyage et validation des données ──────────────
-
-    # Convertir les colonnes en numérique
-    # les valeurs texte → NaN automatiquement
-    for col in cols_notes:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-
-    # Compter les cellules texte converties en NaN
-    nbr_texte = df[cols_notes].isnull().sum().sum()
-    if nbr_texte > 0:
-        st.sidebar.warning(f"{nbr_texte} cellule(s) contenant du texte détectée(s)")
-
-    # Valeurs manquantes (NaN originaux + textes convertis)
-    remplacer = ""
-    if nbr_texte != 0:
-        remplacer = st.sidebar.selectbox("Comment souhaitez-vous traiter les valeurs manquantes ?",
-                                             ['La moyen', 'remplacer par 0', 'Supprimer la ligne'])
-
-    if remplacer == "La moyen":
-        for col in cols_notes:
-            df[col] = df[col].fillna(df[col].mean())
-
-    elif remplacer == "remplacer par 0":
-        for col in cols_notes:
-            df[col] = df[col].fillna(0)
-
-    elif remplacer == "Supprimer la ligne":
-        df = df.dropna(subset=cols_notes)
-
-    # Valeurs aberrantes (hors 0-20)
-    for col in cols_notes:
-        aberrantes = ((df[col] < 0) | (df[col] > 20)).sum()
-        if aberrantes > 0:
-            st.warning(f"{aberrantes} valeur(s) aberrante(s) dans « {col} » — remplacées par la médiane.")
-            median_val = df[(df[col] >= 0) & (df[col] <= 20)][col].median()
-            df[col] = df[col].apply(
-                lambda x: median_val if (x < 0 or x > 20) else x
-            )
-
-    seuil = st.sidebar.number_input(
-    "Veuillez entrer le seuil de réussite: ",
-    min_value=0.0,
-    max_value=20.0,
-    value=10.0
-    )
-
-    if "Afficher_pred" not in st.session_state:
-        st.session_state["Afficher_pred"] = False
-
-    if st.sidebar.button("Afficher"):
-        st.session_state["Afficher_pred"] = True
-
-    if cols_notes and seuil is not None and st.session_state["Afficher_pred"]:
-      df["Moyenne"] = df[cols_notes].mean(axis=1)
-
-      y = (df["Moyenne"] >= seuil).astype(int)
-      X = df[cols_notes]
-
-      df["Statut"] = (df["Moyenne"] >= seuil).map({True: "Réussite", False: "Échec"})
-
-      tab1, tab2, tab3 = st.tabs([
-        "Résultats & Prédiction",
-        "Performances par matière",
-        "Classification par groupes"
+      col_nom_df1 = st.sidebar.selectbox(
+          "Choisir la colonne des noms dans le fichier notes :",
+          df1.columns
+      )
+      col_nom_df2 = st.sidebar.selectbox(
+          "Choisir la colonne des noms dans le fichier absences :",
+          df2.columns
+      )
+
+      #Fusion
+      df = pd.merge(df1, df2, left_on=col_nom_df1, right_on=col_nom_df2)
+
+
+      col_abs = st.sidebar.selectbox(
+          "Choisir la colonne qui représente l'absence :",
+          df.columns
+      )
+
+      colonnes_disponibles = [col for col in df.columns
+                              if col != col_nom_df1 and col != col_nom_df2]
+
+      cols_notes = st.sidebar.multiselect(
+          "Choisir les colonnes qui représentent les notes:",
+          colonnes_disponibles
+      )
+
+      # ── Nettoyage et validation des données ──────────────
+      # Convertir les colonnes en numérique
+      # les valeurs texte - NaN
+      for col in cols_notes:
+          df[col] = pd.to_numeric(df[col], errors='coerce')
+
+      # Compter les cellules texte converties en NaN
+      nbr_texte = df[cols_notes].isnull().sum().sum()
+      if nbr_texte > 0:
+          st.warning(f"{nbr_texte} cellule(s) contenant du texte détectée(s) dans les notes.")
+
+      remplacer = ""
+      if nbr_texte != 0:
+          remplacer = st.sidebar.selectbox(
+              "Comment souhaitez-vous traiter les valeurs manquantes dans les notes ?",
+              ['La moyen', 'remplacer par 0', 'Supprimer la ligne'],
+              key="strategie_notes"
+          )
+
+      if remplacer == "La moyen":
+          for col in cols_notes:
+              df[col] = df[col].fillna(df[col].mean())
+
+      elif remplacer == "remplacer par 0":
+          for col in cols_notes:
+              df[col] = df[col].fillna(0)
+
+      elif remplacer == "Supprimer la ligne":
+          df = df.dropna(subset=cols_notes)
+
+      # Nettoyage de la colonne d'absences
+      df[col_abs] = pd.to_numeric(df[col_abs], errors='coerce')
+
+      nbr_texte_abs = df[col_abs].isnull().sum()
+      if nbr_texte_abs > 0:
+          st.warning(f"{nbr_texte_abs} cellule(s) contenant du texte détectée(s) dans la colonne des absences.")
+
+      remplacer_abs = ""
+      if nbr_texte_abs != 0:
+          remplacer_abs = st.sidebar.selectbox(
+              "Comment souhaitez-vous traiter les valeurs manquantes dans les absences ?",
+              ['La moyen', 'remplacer par 0', 'Supprimer la ligne'],
+              key="strategie_absences"
+          )
+
+      if remplacer_abs == "La moyen":
+          df[col_abs] = df[col_abs].fillna(df[col_abs].mean())
+
+      elif remplacer_abs == "remplacer par 0":
+          df[col_abs] = df[col_abs].fillna(0)
+
+      elif remplacer_abs == "Supprimer la ligne":
+          df = df.dropna(subset=[col_abs])
+
+      # Valeurs aberrantes (hors 0-20)
+      for col in cols_notes:
+          aberrantes = ((df[col] < 0) | (df[col] > 20)).sum()
+          if aberrantes > 0:
+              st.warning(f"{aberrantes} valeur(s) aberrante(s) dans « {col} » — remplacées par la médiane.")
+              median_val = df[(df[col] >= 0) & (df[col] <= 20)][col].median()
+              df[col] = df[col].apply(
+                  lambda x: median_val if (x < 0 or x > 20) else x
+              )
+
+      seuil = st.sidebar.number_input("Veuillez entrer le seuil de réussite: ")
+      seuil_abs = st.sidebar.number_input("Veuillez entrer le seuil d'absence: ")
+
+      if "Afficher_pred" not in st.session_state:
+          st.session_state["Afficher_pred"] = False
+
+      if st.sidebar.button("Afficher"):
+          st.session_state["Afficher_pred"] = True
+
+      if cols_notes and seuil is not None and seuil_abs is not None and st.session_state["Afficher_pred"]:
+
+        df["Moyenne"] = df[cols_notes].mean(axis=1)
+
+        y = ((df["Moyenne"] >= seuil) & (df[col_abs] <= seuil_abs)).astype(int)
+        #st.dataframe(y)
+        X = df[cols_notes + [col_abs]]
+
+        if y.nunique() < 2:
+            st.error("Impossible d'entraîner un modèle : tous les étudiants sont dans la même catégorie.")
+            st.stop()
+
+        # Entrainement de modele
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+        model = LogisticRegression()
+        model.fit(X_train, y_train)
+
+        # Prédiction
+        y_pred = model.predict(X)
+        y_pred_test = model.predict(X_test)
+
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "Résultats",
+            "Corrélation",
+            "Performances",
+            "Risques"
         ])
 
-      with tab1:
-        df_resultats = pd.DataFrame({
-              "Nom": df[colonne_nom],
-              **{col: df[col] for col in cols_notes},
-              "Moyenne": df["Moyenne"],
-              "Statut": df["Statut"],
-        })
+        with tab1:
+          df_resultats = pd.DataFrame({
+                "Nom": df[col_nom_df1],
+                **{col: df[col] for col in cols_notes},
+                "Moyenne": df["Moyenne"],
+                "Absences": df[col_abs],
+                "Prédiction": ["Réussite" if p == 1 else "Échec" for p in y_pred]
+          })
 
-        st.dataframe(df_resultats)
+          st.dataframe(df_resultats)
 
+          st.subheader(" Étudiants à risque d'échec :")
+          df_risque = df_resultats[df_resultats["Prédiction"] == "Échec"]
+          st.dataframe(df_risque)
 
-        pdf_res = FPDF()
-        pdf_res.set_auto_page_break(True, 15)
-        pdf_res.add_page()
+          precision = accuracy_score(y_test, y_pred_test)
+          st.metric("Précision du modèle (sur les données de test)", f"{round(precision * 100, 2)} %")
+          st.markdown("---")
+          classe_save = st.text_input("Classe (pour l'enregistrement)", key="classe_save_fichier_abs")
+          date_save = st.date_input("Date de cette évaluation (pour l'enregistrement)", key="date_save_fichier_abs")
 
-        # ====================================================
-        # ====================================================
-        pdf_res.set_fill_color(184, 187, 146)
-        pdf_res.rect(0, 0, 210, 60, "F")
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-            tmp.write(base64.b64decode(logo_b64))
-            tmp_logo = tmp.name
-        pdf_res.image(tmp_logo, x=140, y=12, w=50)
-        os.unlink(tmp_logo)
-
-        pdf_res.set_draw_color(255, 255, 255)
-        pdf_res.set_line_width(0.4)
-        pdf_res.line(130, 8, 130, 52)
-
-        pdf_res.set_text_color(255, 255, 255)
-        pdf_res.set_font("Helvetica", "B", 30)
-        pdf_res.set_xy(15, 12)
-        pdf_res.multi_cell(110, 12, "Résultats\ndes Étudiants")
-
-        pdf_res.set_font("Helvetica", "", 13)
-        pdf_res.set_xy(15, 40)
-        pdf_res.cell(100, 8, f"Seuil de réussite : {seuil}/20")
-
-        # ====================================================
-        # Statistiques rapides dans encadrés
-        # ====================================================
-        pdf_res.ln(35)
-        y_boxes = pdf_res.get_y()
-
-        pdf_res.set_fill_color(248, 245, 238)
-        pdf_res.rect(15, y_boxes, 85, 35, "F")
-        pdf_res.rect(110, y_boxes, 85, 35, "F")
-
-        # Encadré gauche
-        pdf_res.set_xy(20, y_boxes + 5)
-        pdf_res.set_font("Helvetica", "", 9)
-        pdf_res.set_text_color(100, 100, 100)
-        pdf_res.cell(75, 5, "NOMBRE D'ÉTUDIANTS", ln=True)
-        pdf_res.set_xy(20, y_boxes + 12)
-        pdf_res.set_font("Helvetica", "B", 22)
-        pdf_res.set_text_color(11, 110, 114)
-        pdf_res.cell(75, 10, str(len(df_resultats)), ln=True)
-
-        # Encadré droit
-        pdf_res.set_xy(115, y_boxes + 5)
-        pdf_res.set_font("Helvetica", "", 9)
-        pdf_res.set_text_color(100, 100, 100)
-        pdf_res.cell(75, 5, "MOYENNE GÉNÉRALE", ln=True)
-        pdf_res.set_xy(115, y_boxes + 12)
-        pdf_res.set_font("Helvetica", "B", 22)
-        pdf_res.set_text_color(217, 83, 79)
-        pdf_res.cell(75, 10, str(round(df_resultats["Moyenne"].mean(), 2)), ln=True)
-
-        pdf_res.ln(45)
-
-        # ====================================================
-        # Tableau des résultats
-        # ====================================================
-        pdf_res.set_text_color(40, 40, 40)
-        pdf_res.set_font("Helvetica", "B", 18)
-        pdf_res.cell(0, 10, "Détail des résultats", ln=True)
-        pdf_res.set_draw_color(220, 220, 220)
-        pdf_res.line(15, pdf_res.get_y(), 195, pdf_res.get_y())
-        pdf_res.ln(8)
-
-        # En-tête tableau
-        colonnes = list(df_resultats.columns)
-        largeur_col = 180 // len(colonnes)
-
-        pdf_res.set_fill_color(11, 110, 114)
-        pdf_res.set_text_color(255, 255, 255)
-        pdf_res.set_font("Helvetica", "B", 8)
-        for col in colonnes:
-            pdf_res.cell(largeur_col, 8, str(col)[:15], border=1, fill=True)
-        pdf_res.ln()
-
-        # Lignes tableau
-        pdf_res.set_font("Helvetica", "", 8)
-        for i, row in df_resultats.iterrows():
-            statut = row.get("Statut", row.get("Prédiction", ""))
-            if statut == "Réussite":
-                pdf_res.set_fill_color(230, 244, 245)
-                pdf_res.set_text_color(11, 110, 114)
-            else:
-                pdf_res.set_fill_color(255, 240, 240)
-                pdf_res.set_text_color(217, 83, 79)
-            for val in row:
-                pdf_res.cell(largeur_col, 7,
-                             str(round(val, 2) if isinstance(val, float) else val)[:15],
-                             border=1, fill=True)
-            pdf_res.ln()
-
-        pdf_bytes_res = bytes(pdf_res.output())
-
-        st.download_button(
-            label="Télécharger en PDF",
-            data=pdf_bytes_res,
-            file_name="resultats_etudiants.pdf",
-            mime="application/pdf"
-        )
+          if st.button("Enregistrer les résultats dans la base", key="save_predictions_fichier_abs"):
+              for _, ligne in df_resultats.iterrows():
+                  ajouter_etudiant(ligne["Nom"], classe_save)
+                  ajouter_prediction(ligne["Nom"], date_save, ligne["Moyenne"], ligne["Prédiction"])
+              st.success(f"{len(df_resultats)} résultat(s) enregistré(s).")
 
 
-      with tab2:
-        st.subheader("Comparaison des moyennes par matière: ")
+        with tab2:
+          st.subheader("Corrélation entre absences et notes par matière")
 
-        moyennes_par_matiere = df[cols_notes].mean()
-        matiere_faible = moyennes_par_matiere.idxmin()
+          with st.expander("Comment lire ce graphique ?"):
+              st.write("""
+              **La heatmap de corrélation** montre la relation entre chaque paire de colonnes :
 
-        st.metric("Matière la plus faible", matiere_faible,
-                    f"{round(moyennes_par_matiere[matiere_faible], 2)}/20")
+            🔴 **Proche de +1** → Forte corrélation positive : quand l'une augmente, l'autre augmente aussi
 
-        fig1, ax = plt.subplots()
-        fig1.patch.set_alpha(0)
-        ax.set_facecolor("none")
-        ax.barh(moyennes_par_matiere.index, moyennes_par_matiere.values, color='#0B6E72', height=0.2)
-        ax.set_xlabel("Moyenne")
-        ax.axvline(x=seuil, color='red', linestyle='--', label=f'Seuil ({seuil})')
-        ax.legend()
-        fig1.tight_layout()
-        st.pyplot(fig1)
+            🔵 **Proche de -1** → Forte corrélation négative : quand l'une augmente, l'autre diminue
 
-        # Telechargement
-        buffer1 = io.BytesIO()
-        fig1.savefig(buffer1, format="png")
-        st.download_button(
-            label="Télécharger le graphe (format png)",
-            data=buffer1.getvalue(),
-            file_name="Histogramme1.png",
-            mime="image/png"
-        )
+            ⬜ **Proche de 0** → Pas de corrélation : les deux colonnes sont indépendantes
 
-        echecs_par_matiere = (df[cols_notes] < seuil).sum()
-        matiere_plus_dechec = echecs_par_matiere.idxmax()
-        st.metric("Matière avec le plus d'échecs", matiere_plus_dechec,
-                    f"{echecs_par_matiere[matiere_plus_dechec]} étudiants en échec")
+            **Exemple concret :**
+            Si la case "Absences / Maths" affiche **-0.8**, cela signifie que plus un étudiant est absent, 
+            moins sa note en Maths est bonne. C'est une forte corrélation négative !
 
-        fig2, ax = plt.subplots()
-        fig2.patch.set_alpha(0)
-        ax.set_facecolor("none")
-        ax.barh(echecs_par_matiere.index, echecs_par_matiere.values, color='#0B6E72', height=0.2)
-        ax.set_xlabel("Nombre d'échecs")
-        fig2.tight_layout()
-        st.pyplot(fig2)
+            **Ce qu'il faut regarder :**
+            → Les cases entre **Absences** et chaque matière
+            → Plus la valeur est proche de **-1**, plus les absences impactent cette matière
+            """)
 
-        # Telechargement
-        buffer2 = io.BytesIO()
-        fig2.savefig(buffer2, format="png")
-        st.download_button(
-            label="Télécharger le graphe (format png)",
-            data=buffer2.getvalue(),
-            file_name="Histogramme2.png",
-            mime="image/png"
-        )
+          fig, ax = plt.subplots(figsize=(10, 6))
+          sns.heatmap(
+            df[cols_notes + [col_abs]].corr(),
+            annot=True,
+            cmap="coolwarm",
+            ax=ax
+          )
+          st.pyplot(fig)
 
-
-      with tab3:
-          n_clusters = min(3, df["Moyenne"].nunique())
-          kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-          kmeans.fit(df[["Moyenne"]])
-          df["Groupe"] = kmeans.labels_
-
-          moyennes_groupes = df.groupby("Groupe")["Moyenne"].mean().sort_values()
-
-          if n_clusters == 3:
-              noms_profils = ["En difficulté", "Moyen", "Excellent"]
-          elif n_clusters == 2:
-              noms_profils = ["En difficulté", "Excellent"]
-          else:
-              noms_profils = ["Excellent"]
-          labels = {moyennes_groupes.index[i]: noms_profils[i] for i in range(n_clusters)}
-
-          df["Profil"] = df["Groupe"].map(labels)
-
-          st.dataframe(df[[colonne_nom, "Moyenne", "Profil"]])
-
-          count = df["Profil"].value_counts()
-
-          color_map = {
-              "Excellent": '#0B6E72',
-              "Moyen": '#F4A261',
-              "En difficulté": '#E63946'
-          }
-          colors = [color_map[label] for label in count.index]
-
-          fig3, ax = plt.subplots()
-          fig3.patch.set_alpha(0)
-          ax.set_facecolor("none")
-          ax.pie(count, labels=count.index, autopct='%1.1f%%', colors=colors)
-          st.pyplot(fig3)
-
-          # Telechargement
-          buffer3 = io.BytesIO()
-          fig3.savefig(buffer3, format="png")
+          #Telecharger
+          buffer = io.BytesIO()
+          fig.savefig(buffer, format="png")
           st.download_button(
               label="Télécharger le graphe (format png)",
-              data=buffer3.getvalue(),
-              file_name="Classement.png",
+              data=buffer.getvalue(),
+              file_name="Heatmap.png",
               mime="image/png"
           )
 
-          # Statistiques par groupe
-          st.subheader("Statistiques par groupe: ")
-          st.dataframe(df.groupby("Profil")["Moyenne"].agg(['mean', 'count', 'min', 'max'])
-                       .rename(columns={'mean': 'Moyenne', 'count': 'Nombre',
-                                        'min': 'Min', 'max': 'Max'}))
+        with tab3:
+          st.subheader("Comparaison des moyennes par matière")
+
+          moyennes_par_matiere = df[cols_notes].mean()
+          matiere_faible = moyennes_par_matiere.idxmin()
+
+          st.metric("Matière la plus faible", matiere_faible,
+                  f"{round(moyennes_par_matiere[matiere_faible], 2)}/20")
+
+          #hist
+          fig1, ax = plt.subplots()
+          ax.barh(moyennes_par_matiere.index, moyennes_par_matiere.values, color='#0B6E72', height=0.2)
+          ax.set_xlabel("Moyenne")
+          ax.axvline(x=seuil, color='red', linestyle='--', label=f'Seuil ({seuil})')
+          ax.legend()
+          fig1.tight_layout()
+          st.pyplot(fig1)
+
+          buffer = io.BytesIO()
+          fig1.savefig(buffer, format="png")
+          st.download_button(
+              label="Télécharger le graphe (format png)",
+              data=buffer.getvalue(),
+              file_name="Histogramme1.png",
+              mime="image/png"
+          )
+
+
+          echecs_par_matiere = (df[cols_notes] < seuil).sum()
+          matiere_plus_dechec = echecs_par_matiere.idxmax()
+          st.metric("Matière avec le plus d'échecs", matiere_plus_dechec,
+                f"{echecs_par_matiere[matiere_plus_dechec]} étudiants en échec")
+
+          #hist
+          fig2, ax = plt.subplots()
+          ax.barh(echecs_par_matiere.index, echecs_par_matiere.values, color='#E63946', height=0.2)
+          ax.set_xlabel("Nombre d'échecs")
+          fig2.tight_layout()
+          st.pyplot(fig2)
+
+          buffer = io.BytesIO()
+          fig2.savefig(buffer, format="png")
+          st.download_button(
+              label="Télécharger le graphe (format png)",
+              data=buffer.getvalue(),
+              file_name="Histogramme2.png",
+              mime="image/png"
+          )
+
+
+        with tab4:
+          st.subheader("Étudiants à double risque")
+          df_double_risque = df[
+            (df["Moyenne"] < seuil) & (df[col_abs] > seuil_abs)
+            ][[col_nom_df1, "Moyenne", col_abs]]
+
+          st.metric("Nombre d'étudiants à risque", len(df_double_risque))
+          st.dataframe(df_double_risque)
+
+          if len(df_double_risque) > 0:
+              st.error(f" {len(df_double_risque)} étudiant(s) nécessitent une intervention !")
+              csv_risque = df_double_risque.to_csv(index=False).encode("utf-8")
+              st.download_button(
+                  label="Télécharger la liste (format csv)",
+                  data=csv_risque,
+                  file_name="etudiants_a_risque.csv",
+                  mime="text/csv"
+              )
+          else:
+              st.success("Aucun étudiant à double risque détecté !")
 
           st.markdown("---")
           st.subheader("Rapport complet:")
@@ -908,7 +398,7 @@ else:
           pdf_complet.multi_cell(110, 12, "Rapport\nPrédictif")
           pdf_complet.set_font("Helvetica", "", 13)
           pdf_complet.set_xy(15, 40)
-          pdf_complet.cell(100, 8, f"Seuil de réussite : {seuil}/20")
+          pdf_complet.cell(100, 8, f"Seuil notes : {seuil}/20 | Seuil absences : {seuil_abs}")
 
           # ── Encadrés statistiques ────────────────────────────
           pdf_complet.ln(35)
@@ -916,8 +406,8 @@ else:
           pdf_complet.set_fill_color(248, 245, 238)
           pdf_complet.rect(15, y_boxes, 85, 35, "F")
           pdf_complet.rect(110, y_boxes, 85, 35, "F")
-          nb_reussite = len(df[df["Statut"] == "Réussite"])
-          nb_echec = len(df[df["Statut"] == "Échec"])
+          nb_reussite = len(df_resultats[df_resultats["Prédiction"] == "Réussite"])
+          nb_echec = len(df_resultats[df_resultats["Prédiction"] == "Échec"])
 
           pdf_complet.set_xy(20, y_boxes + 5)
           pdf_complet.set_font("Helvetica", "", 9)
@@ -981,7 +471,7 @@ else:
           pdf_complet.ln()
           pdf_complet.set_font("Helvetica", "", 8)
           for i, row in df_resultats.iterrows():
-              if row.get("Statut") == "Réussite":
+              if row.get("Prédiction") == "Réussite":
                   pdf_complet.set_fill_color(230, 244, 245)
                   pdf_complet.set_text_color(11, 110, 114)
               else:
@@ -1029,7 +519,1276 @@ else:
           pdf_complet.image(tmp_e, x=15, w=180)
           os.unlink(tmp_e)
 
-          # ── Page 4 : Classification K-Means ──────────────────
+          # ── Page 4 : Corrélation ─────────────────────────────
+          pdf_complet.add_page()
+          pdf_complet.set_fill_color(11, 110, 114)
+          pdf_complet.rect(0, 0, 210, 6, "F")
+          pdf_complet.ln(12)
+          pdf_complet.set_text_color(40, 40, 40)
+          pdf_complet.set_font("Helvetica", "B", 16)
+          pdf_complet.cell(0, 10, "Corrélation absences / notes", ln=True)
+          pdf_complet.set_draw_color(220, 220, 220)
+          pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
+          pdf_complet.ln(8)
+
+          # Sauvegarder la heatmap
+          fig_heatmap, ax_h = plt.subplots(figsize=(10, 6))
+          sns.heatmap(df[cols_notes + [col_abs]].corr(), annot=True, cmap="RdYlGn", ax=ax_h)
+          buffer_heat = io.BytesIO()
+          fig_heatmap.savefig(buffer_heat, format="png", bbox_inches="tight", dpi=150)
+          buffer_heat.seek(0)
+          with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+              tmp.write(buffer_heat.read())
+              tmp_heat = tmp.name
+          pdf_complet.image(tmp_heat, x=15, w=180)
+          os.unlink(tmp_heat)
+          plt.close(fig_heatmap)
+
+          # ── Page 5 : Étudiants à double risque ───────────────
+          pdf_complet.add_page()
+          pdf_complet.set_fill_color(11, 110, 114)
+          pdf_complet.rect(0, 0, 210, 6, "F")
+          pdf_complet.ln(12)
+          pdf_complet.set_text_color(40, 40, 40)
+          pdf_complet.set_font("Helvetica", "B", 16)
+          pdf_complet.cell(0, 10, "Étudiants à double risque", ln=True)
+          pdf_complet.set_draw_color(220, 220, 220)
+          pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
+          pdf_complet.ln(8)
+
+          if len(df_double_risque) > 0:
+              cols_risque = list(df_double_risque.columns)
+              larg_r = 180 // len(cols_risque)
+              pdf_complet.set_fill_color(11, 110, 114)
+              pdf_complet.set_text_color(255, 255, 255)
+              pdf_complet.set_font("Helvetica", "B", 9)
+              for col in cols_risque:
+                  pdf_complet.cell(larg_r, 8, str(col)[:20], border=1, fill=True)
+              pdf_complet.ln()
+              pdf_complet.set_font("Helvetica", "", 9)
+              for i, row in df_double_risque.iterrows():
+                  pdf_complet.set_fill_color(255, 240, 240)
+                  pdf_complet.set_text_color(217, 83, 79)
+                  for val in row:
+                      pdf_complet.cell(larg_r, 7,
+                                       str(round(val, 2) if isinstance(val, float) else val)[:20],
+                                       border=1, fill=True)
+                      pdf_complet.ln()
+          else:
+              pdf_complet.set_font("Helvetica", "", 11)
+              pdf_complet.set_text_color(11, 110, 114)
+              pdf_complet.cell(0, 10, "Aucun étudiant à double risque détecté.", ln=True)
+
+          pdf_bytes_complet = bytes(pdf_complet.output())
+          st.download_button(
+              label="Télécharger le rapport complet (PDF)",
+              data=pdf_bytes_complet,
+              file_name="rapport_predictif_avec_absences.pdf",
+              mime="application/pdf"
+          )
+
+          plt.close(fig)
+          plt.close(fig1)
+          plt.close(fig2)
+
+  else:
+    if fichier1 is not None:
+      try:
+          if fichier1.name.endswith(".csv"):
+              df = pd.read_csv(fichier1)
+          else:
+              df = pd.read_excel(fichier1)
+      except Exception as e:
+          st.error(f"Impossible de lire le fichier : {e}")
+          st.stop()
+
+      colonne_nom = st.sidebar.selectbox("Quelle colonne représente les noms des étudiants ?", df.columns)
+
+      colonnes_disponibles = [col for col in df.columns if col != colonne_nom]
+
+      cols_notes = st.sidebar.multiselect(
+          "Choisir les colonnes qui représentent les notes:",
+          colonnes_disponibles
+      )
+
+      # ── Nettoyage et validation des données ──────────────
+
+      # Convertir les colonnes en numérique
+      # les valeurs texte → NaN automatiquement
+      for col in cols_notes:
+          df[col] = pd.to_numeric(df[col], errors='coerce')
+
+      # Compter les cellules texte converties en NaN
+      nbr_texte = df[cols_notes].isnull().sum().sum()
+      if nbr_texte > 0:
+          st.sidebar.warning(f"{nbr_texte} cellule(s) contenant du texte détectée(s)")
+
+      # Valeurs manquantes (NaN originaux + textes convertis)
+      remplacer = ""
+      if nbr_texte != 0:
+          remplacer = st.sidebar.selectbox("Comment souhaitez-vous traiter les valeurs manquantes ?",
+                                               ['La moyen', 'remplacer par 0', 'Supprimer la ligne'])
+
+      if remplacer == "La moyen":
+          for col in cols_notes:
+              df[col] = df[col].fillna(df[col].mean())
+
+      elif remplacer == "remplacer par 0":
+          for col in cols_notes:
+              df[col] = df[col].fillna(0)
+
+      elif remplacer == "Supprimer la ligne":
+          df = df.dropna(subset=cols_notes)
+
+      # Valeurs aberrantes (hors 0-20)
+      for col in cols_notes:
+          aberrantes = ((df[col] < 0) | (df[col] > 20)).sum()
+          if aberrantes > 0:
+              st.warning(f"{aberrantes} valeur(s) aberrante(s) dans « {col} » — remplacées par la médiane.")
+              median_val = df[(df[col] >= 0) & (df[col] <= 20)][col].median()
+              df[col] = df[col].apply(
+                  lambda x: median_val if (x < 0 or x > 20) else x
+              )
+
+      seuil = st.sidebar.number_input(
+      "Veuillez entrer le seuil de réussite: ",
+      min_value=0.0,
+      max_value=20.0,
+      value=10.0
+      )
+
+      if "Afficher_pred" not in st.session_state:
+          st.session_state["Afficher_pred"] = False
+
+      if st.sidebar.button("Afficher"):
+          st.session_state["Afficher_pred"] = True
+
+      if cols_notes and seuil is not None and st.session_state["Afficher_pred"]:
+        df["Moyenne"] = df[cols_notes].mean(axis=1)
+
+        y = (df["Moyenne"] >= seuil).astype(int)
+        X = df[cols_notes]
+
+        df["Statut"] = (df["Moyenne"] >= seuil).map({True: "Réussite", False: "Échec"})
+
+        tab1, tab2, tab3 = st.tabs([
+          "Résultats & Prédiction",
+          "Performances par matière",
+          "Classification par groupes"
+          ])
+
+        with tab1:
+          df_resultats = pd.DataFrame({
+                "Nom": df[colonne_nom],
+                **{col: df[col] for col in cols_notes},
+                "Moyenne": df["Moyenne"],
+                "Statut": df["Statut"],
+          })
+
+          st.dataframe(df_resultats)
+
+          st.markdown("---")
+          classe_save = st.text_input("Classe (pour l'enregistrement)", key="classe_save_fichier_sans_abs")
+          date_save = st.date_input("Date de cette évaluation (pour l'enregistrement)",
+                                    key="date_save_fichier_sans_abs")
+
+          if st.button("Enregistrer les résultats dans la base", key="save_predictions_fichier_sans_abs"):
+              for _, ligne in df_resultats.iterrows():
+                  ajouter_etudiant(ligne["Nom"], classe_save)
+                  ajouter_prediction(ligne["Nom"], date_save, ligne["Moyenne"], ligne["Statut"])
+              st.success(f"{len(df_resultats)} résultat(s) enregistré(s).")
+
+
+          pdf_res = FPDF()
+          pdf_res.set_auto_page_break(True, 15)
+          pdf_res.add_page()
+
+          pdf_res.set_fill_color(184, 187, 146)
+          pdf_res.rect(0, 0, 210, 60, "F")
+
+          with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+              tmp.write(base64.b64decode(logo_b64))
+              tmp_logo = tmp.name
+          pdf_res.image(tmp_logo, x=140, y=12, w=50)
+          os.unlink(tmp_logo)
+
+          pdf_res.set_draw_color(255, 255, 255)
+          pdf_res.set_line_width(0.4)
+          pdf_res.line(130, 8, 130, 52)
+
+          pdf_res.set_text_color(255, 255, 255)
+          pdf_res.set_font("Helvetica", "B", 30)
+          pdf_res.set_xy(15, 12)
+          pdf_res.multi_cell(110, 12, "Résultats\ndes Étudiants")
+
+          pdf_res.set_font("Helvetica", "", 13)
+          pdf_res.set_xy(15, 40)
+          pdf_res.cell(100, 8, f"Seuil de réussite : {seuil}/20")
+
+          pdf_res.ln(35)
+          y_boxes = pdf_res.get_y()
+
+          pdf_res.set_fill_color(248, 245, 238)
+          pdf_res.rect(15, y_boxes, 85, 35, "F")
+          pdf_res.rect(110, y_boxes, 85, 35, "F")
+
+          # Encadré gauche
+          pdf_res.set_xy(20, y_boxes + 5)
+          pdf_res.set_font("Helvetica", "", 9)
+          pdf_res.set_text_color(100, 100, 100)
+          pdf_res.cell(75, 5, "NOMBRE D'ÉTUDIANTS", ln=True)
+          pdf_res.set_xy(20, y_boxes + 12)
+          pdf_res.set_font("Helvetica", "B", 22)
+          pdf_res.set_text_color(11, 110, 114)
+          pdf_res.cell(75, 10, str(len(df_resultats)), ln=True)
+
+          # Encadré droit
+          pdf_res.set_xy(115, y_boxes + 5)
+          pdf_res.set_font("Helvetica", "", 9)
+          pdf_res.set_text_color(100, 100, 100)
+          pdf_res.cell(75, 5, "MOYENNE GÉNÉRALE", ln=True)
+          pdf_res.set_xy(115, y_boxes + 12)
+          pdf_res.set_font("Helvetica", "B", 22)
+          pdf_res.set_text_color(217, 83, 79)
+          pdf_res.cell(75, 10, str(round(df_resultats["Moyenne"].mean(), 2)), ln=True)
+
+          pdf_res.ln(45)
+
+          pdf_res.set_text_color(40, 40, 40)
+          pdf_res.set_font("Helvetica", "B", 18)
+          pdf_res.cell(0, 10, "Détail des résultats", ln=True)
+          pdf_res.set_draw_color(220, 220, 220)
+          pdf_res.line(15, pdf_res.get_y(), 195, pdf_res.get_y())
+          pdf_res.ln(8)
+
+          # En-tête tableau
+          colonnes = list(df_resultats.columns)
+          largeur_col = 180 // len(colonnes)
+
+          pdf_res.set_fill_color(11, 110, 114)
+          pdf_res.set_text_color(255, 255, 255)
+          pdf_res.set_font("Helvetica", "B", 8)
+          for col in colonnes:
+              pdf_res.cell(largeur_col, 8, str(col)[:15], border=1, fill=True)
+          pdf_res.ln()
+
+          # Lignes tableau
+          pdf_res.set_font("Helvetica", "", 8)
+          for i, row in df_resultats.iterrows():
+              statut = row.get("Statut", row.get("Prédiction", ""))
+              if statut == "Réussite":
+                  pdf_res.set_fill_color(230, 244, 245)
+                  pdf_res.set_text_color(11, 110, 114)
+              else:
+                  pdf_res.set_fill_color(255, 240, 240)
+                  pdf_res.set_text_color(217, 83, 79)
+              for val in row:
+                  pdf_res.cell(largeur_col, 7,
+                               str(round(val, 2) if isinstance(val, float) else val)[:15],
+                               border=1, fill=True)
+              pdf_res.ln()
+
+          pdf_bytes_res = bytes(pdf_res.output())
+
+          st.download_button(
+              label="Télécharger en PDF",
+              data=pdf_bytes_res,
+              file_name="resultats_etudiants.pdf",
+              mime="application/pdf"
+          )
+
+
+        with tab2:
+          st.subheader("Comparaison des moyennes par matière: ")
+
+          moyennes_par_matiere = df[cols_notes].mean()
+          matiere_faible = moyennes_par_matiere.idxmin()
+
+          st.metric("Matière la plus faible", matiere_faible,
+                      f"{round(moyennes_par_matiere[matiere_faible], 2)}/20")
+
+          fig1, ax = plt.subplots()
+          fig1.patch.set_alpha(0)
+          ax.set_facecolor("none")
+          ax.barh(moyennes_par_matiere.index, moyennes_par_matiere.values, color='#0B6E72', height=0.2)
+          ax.set_xlabel("Moyenne")
+          ax.axvline(x=seuil, color='red', linestyle='--', label=f'Seuil ({seuil})')
+          ax.legend()
+          fig1.tight_layout()
+          st.pyplot(fig1)
+
+          # Telechargement
+          buffer1 = io.BytesIO()
+          fig1.savefig(buffer1, format="png")
+          st.download_button(
+              label="Télécharger le graphe (format png)",
+              data=buffer1.getvalue(),
+              file_name="Histogramme1.png",
+              mime="image/png"
+          )
+
+          echecs_par_matiere = (df[cols_notes] < seuil).sum()
+          matiere_plus_dechec = echecs_par_matiere.idxmax()
+          st.metric("Matière avec le plus d'échecs", matiere_plus_dechec,
+                      f"{echecs_par_matiere[matiere_plus_dechec]} étudiants en échec")
+
+          fig2, ax = plt.subplots()
+          fig2.patch.set_alpha(0)
+          ax.set_facecolor("none")
+          ax.barh(echecs_par_matiere.index, echecs_par_matiere.values, color='#0B6E72', height=0.2)
+          ax.set_xlabel("Nombre d'échecs")
+          fig2.tight_layout()
+          st.pyplot(fig2)
+
+          # Telechargement
+          buffer2 = io.BytesIO()
+          fig2.savefig(buffer2, format="png")
+          st.download_button(
+              label="Télécharger le graphe (format png)",
+              data=buffer2.getvalue(),
+              file_name="Histogramme2.png",
+              mime="image/png"
+          )
+
+
+        with tab3:
+            n_clusters = min(3, df["Moyenne"].nunique())
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+            kmeans.fit(df[["Moyenne"]])
+            df["Groupe"] = kmeans.labels_
+
+            moyennes_groupes = df.groupby("Groupe")["Moyenne"].mean().sort_values()
+
+            if n_clusters == 3:
+                noms_profils = ["En difficulté", "Moyen", "Excellent"]
+            elif n_clusters == 2:
+                noms_profils = ["En difficulté", "Excellent"]
+            else:
+                noms_profils = ["Excellent"]
+            labels = {moyennes_groupes.index[i]: noms_profils[i] for i in range(n_clusters)}
+
+            df["Profil"] = df["Groupe"].map(labels)
+
+            st.dataframe(df[[colonne_nom, "Moyenne", "Profil"]])
+
+            count = df["Profil"].value_counts()
+
+            color_map = {
+                "Excellent": '#0B6E72',
+                "Moyen": '#F4A261',
+                "En difficulté": '#E63946'
+            }
+            colors = [color_map[label] for label in count.index]
+
+            fig3, ax = plt.subplots()
+            fig3.patch.set_alpha(0)
+            ax.set_facecolor("none")
+            ax.pie(count, labels=count.index, autopct='%1.1f%%', colors=colors)
+            st.pyplot(fig3)
+
+            # Telechargement
+            buffer3 = io.BytesIO()
+            fig3.savefig(buffer3, format="png")
+            st.download_button(
+                label="Télécharger le graphe (format png)",
+                data=buffer3.getvalue(),
+                file_name="Classement.png",
+                mime="image/png"
+            )
+
+            # Statistiques par groupe
+            st.subheader("Statistiques par groupe: ")
+            st.dataframe(df.groupby("Profil")["Moyenne"].agg(['mean', 'count', 'min', 'max'])
+                         .rename(columns={'mean': 'Moyenne', 'count': 'Nombre',
+                                          'min': 'Min', 'max': 'Max'}))
+
+            st.markdown("---")
+            st.subheader("Rapport complet:")
+
+            pdf_complet = FPDF()
+            pdf_complet.set_auto_page_break(True, 15)
+            pdf_complet.add_page()
+
+            # ── Header ──────────────────────────────────────────
+            pdf_complet.set_fill_color(184, 187, 146)
+            pdf_complet.rect(0, 0, 210, 60, "F")
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                tmp.write(base64.b64decode(logo_b64))
+                tmp_logo = tmp.name
+            pdf_complet.image(tmp_logo, x=140, y=0, w=50)
+            os.unlink(tmp_logo)
+            pdf_complet.set_draw_color(255, 255, 255)
+            pdf_complet.set_line_width(0.4)
+            pdf_complet.line(130, 8, 130, 52)
+            pdf_complet.set_text_color(255, 255, 255)
+            pdf_complet.set_font("Helvetica", "B", 30)
+            pdf_complet.set_xy(15, 12)
+            pdf_complet.multi_cell(110, 12, "Rapport\nPrédictif")
+            pdf_complet.set_font("Helvetica", "", 13)
+            pdf_complet.set_xy(15, 40)
+            pdf_complet.cell(100, 8, f"Seuil de réussite : {seuil}/20")
+
+            # ── Encadrés statistiques ────────────────────────────
+            pdf_complet.ln(35)
+            y_boxes = pdf_complet.get_y()
+            pdf_complet.set_fill_color(248, 245, 238)
+            pdf_complet.rect(15, y_boxes, 85, 35, "F")
+            pdf_complet.rect(110, y_boxes, 85, 35, "F")
+            nb_reussite = len(df[df["Statut"] == "Réussite"])
+            nb_echec = len(df[df["Statut"] == "Échec"])
+
+            pdf_complet.set_xy(20, y_boxes + 5)
+            pdf_complet.set_font("Helvetica", "", 9)
+            pdf_complet.set_text_color(100, 100, 100)
+            pdf_complet.cell(75, 5, "NOMBRE D'ÉTUDIANTS", ln=True)
+            pdf_complet.set_xy(20, y_boxes + 12)
+            pdf_complet.set_font("Helvetica", "B", 22)
+            pdf_complet.set_text_color(11, 110, 114)
+            pdf_complet.cell(75, 10, str(len(df)), ln=True)
+            pdf_complet.set_xy(20, y_boxes + 24)
+            pdf_complet.set_font("Helvetica", "", 9)
+            pdf_complet.set_text_color(100, 100, 100)
+            pdf_complet.cell(75, 5, f"Réussite : {nb_reussite} | Échec : {nb_echec}")
+
+            pdf_complet.set_xy(115, y_boxes + 5)
+            pdf_complet.set_font("Helvetica", "", 9)
+            pdf_complet.set_text_color(100, 100, 100)
+            pdf_complet.cell(75, 5, "MOYENNE GÉNÉRALE", ln=True)
+            pdf_complet.set_xy(115, y_boxes + 12)
+            pdf_complet.set_font("Helvetica", "B", 22)
+            pdf_complet.set_text_color(217, 83, 79)
+            pdf_complet.cell(75, 10, str(round(df["Moyenne"].mean(), 2)), ln=True)
+            pdf_complet.set_xy(115, y_boxes + 24)
+            pdf_complet.set_font("Helvetica", "", 9)
+            pdf_complet.set_text_color(100, 100, 100)
+            pdf_complet.cell(75, 5, f"Seuil : {seuil}/20")
+            pdf_complet.ln(45)
+
+            # ── Description ──────────────────────────────────────
+            pdf_complet.set_text_color(40, 40, 40)
+            pdf_complet.set_font("Helvetica", "B", 20)
+            pdf_complet.cell(0, 12, "À propos du rapport", ln=True)
+            pdf_complet.ln(3)
+            pdf_complet.set_font("Helvetica", "", 11)
+            pdf_complet.multi_cell(0, 7,
+                                   "Ce rapport présente une analyse prédictive des performances étudiantes "
+                                   "basée sur les notes par matière. Il inclut les résultats individuels, "
+                                   "les performances par matière et la classification des étudiants par profil."
+                                   )
+            pdf_complet.ln(10)
+
+            # ── Page 2 : Résultats ────────────────────────────────
+            pdf_complet.add_page()
+            pdf_complet.set_fill_color(11, 110, 114)
+            pdf_complet.rect(0, 0, 210, 6, "F")
+            pdf_complet.ln(12)
+            pdf_complet.set_text_color(40, 40, 40)
+            pdf_complet.set_font("Helvetica", "B", 16)
+            pdf_complet.cell(0, 10, "Résultats & Prédiction", ln=True)
+            pdf_complet.set_draw_color(220, 220, 220)
+            pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
+            pdf_complet.ln(8)
+
+            colonnes_res = list(df_resultats.columns)
+            largeur_col = 180 // len(colonnes_res)
+            pdf_complet.set_fill_color(11, 110, 114)
+            pdf_complet.set_text_color(255, 255, 255)
+            pdf_complet.set_font("Helvetica", "B", 8)
+            for col in colonnes_res:
+                pdf_complet.cell(largeur_col, 8, str(col)[:15], border=1, fill=True)
+            pdf_complet.ln()
+            pdf_complet.set_font("Helvetica", "", 8)
+            for i, row in df_resultats.iterrows():
+                if row.get("Statut") == "Réussite":
+                    pdf_complet.set_fill_color(230, 244, 245)
+                    pdf_complet.set_text_color(11, 110, 114)
+                else:
+                    pdf_complet.set_fill_color(255, 240, 240)
+                    pdf_complet.set_text_color(217, 83, 79)
+                for val in row:
+                    pdf_complet.cell(largeur_col, 7,
+                                     str(round(val, 2) if isinstance(val, float) else val)[:15],
+                                     border=1, fill=True)
+                pdf_complet.ln()
+
+            # ── Page 3 : Performances par matière ────────────────
+            pdf_complet.add_page()
+            pdf_complet.set_fill_color(11, 110, 114)
+            pdf_complet.rect(0, 0, 210, 6, "F")
+            pdf_complet.ln(12)
+            pdf_complet.set_text_color(40, 40, 40)
+            pdf_complet.set_font("Helvetica", "B", 16)
+            pdf_complet.cell(0, 10, "Performances par matière", ln=True)
+            pdf_complet.set_draw_color(220, 220, 220)
+            pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
+            pdf_complet.ln(8)
+
+            buffer_m = io.BytesIO()
+            fig1.savefig(buffer_m, format="png", bbox_inches="tight", dpi=150)
+            buffer_m.seek(0)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                tmp.write(buffer_m.read())
+                tmp_m = tmp.name
+            pdf_complet.set_font("Helvetica", "B", 11)
+            pdf_complet.set_text_color(50, 50, 50)
+            pdf_complet.cell(0, 7, "Moyenne par matière", ln=True)
+            pdf_complet.image(tmp_m, x=15, w=180)
+            os.unlink(tmp_m)
+            pdf_complet.ln(8)
+
+            buffer_e = io.BytesIO()
+            fig2.savefig(buffer_e, format="png", bbox_inches="tight", dpi=150)
+            buffer_e.seek(0)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                tmp.write(buffer_e.read())
+                tmp_e = tmp.name
+            pdf_complet.set_font("Helvetica", "B", 11)
+            pdf_complet.cell(0, 7, "Nombre d'échecs par matière", ln=True)
+            pdf_complet.image(tmp_e, x=15, w=180)
+            os.unlink(tmp_e)
+
+            # ── Page 4 : Classification K-Means ──────────────────
+            pdf_complet.add_page()
+            pdf_complet.set_fill_color(11, 110, 114)
+            pdf_complet.rect(0, 0, 210, 6, "F")
+            pdf_complet.ln(12)
+            pdf_complet.set_text_color(40, 40, 40)
+            pdf_complet.set_font("Helvetica", "B", 16)
+            pdf_complet.cell(0, 10, "Classification par groupes: ", ln=True)
+            pdf_complet.set_draw_color(220, 220, 220)
+            pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
+            pdf_complet.ln(8)
+
+            buffer_k = io.BytesIO()
+            fig3.savefig(buffer_k, format="png", bbox_inches="tight", dpi=150)
+            buffer_k.seek(0)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                tmp.write(buffer_k.read())
+                tmp_k = tmp.name
+            pdf_complet.image(tmp_k, x=40, w=120)
+            os.unlink(tmp_k)
+            pdf_complet.ln(8)
+
+            # Tableau statistiques par groupe
+            stats_groupe = df.groupby("Profil")["Moyenne"].agg(
+                ['mean', 'count', 'min', 'max']
+            ).rename(columns={
+                'mean': 'Moyenne', 'count': 'Nombre', 'min': 'Min', 'max': 'Max'
+            }).reset_index()
+
+            pdf_complet.set_font("Helvetica", "B", 11)
+            pdf_complet.set_text_color(50, 50, 50)
+            pdf_complet.cell(0, 7, "Statistiques par groupe", ln=True)
+            pdf_complet.ln(4)
+
+            # En-tête tableau groupes
+            cols_groupe = list(stats_groupe.columns)
+            larg = 180 // len(cols_groupe)
+            pdf_complet.set_fill_color(11, 110, 114)
+            pdf_complet.set_text_color(255, 255, 255)
+            pdf_complet.set_font("Helvetica", "B", 9)
+            for col in cols_groupe:
+                pdf_complet.cell(larg, 8, str(col), border=1, fill=True)
+            pdf_complet.ln()
+
+            # Lignes tableau groupes
+            color_map_pdf = {
+                "Excellent": (230, 244, 245),
+                "Moyen": (255, 248, 225),
+                "En difficulté": (255, 240, 240),
+            }
+            pdf_complet.set_font("Helvetica", "", 9)
+            for i, row in stats_groupe.iterrows():
+                profil = row["Profil"]
+                r, g, b = color_map_pdf.get(profil, (248, 248, 248))
+                pdf_complet.set_fill_color(r, g, b)
+                pdf_complet.set_text_color(40, 40, 40)
+                for val in row:
+                    pdf_complet.cell(larg, 7,
+                                     str(round(val, 2) if isinstance(val, float) else val),
+                                     border=1, fill=True)
+                pdf_complet.ln()
+
+            pdf_bytes_complet = bytes(pdf_complet.output())
+            st.download_button(
+                label="Télécharger le rapport complet (PDF)",
+                data=pdf_bytes_complet,
+                file_name="rapport_predictif_sans_absences.pdf",
+                mime="application/pdf"
+            )
+
+            plt.close(fig1)
+            plt.close(fig2)
+            plt.close(fig3)
+
+else:
+  liste_classes = recuperer_classes()
+
+  if not liste_classes:
+    st.info("Aucune classe enregistrée dans la base pour le moment.")
+    st.stop()
+
+  classe_choisie = st.sidebar.selectbox("Choisir une classe", liste_classes)
+  dates_disponibles = recuperer_dates_classe(classe_choisie)
+
+  if not dates_disponibles:
+    st.info("Aucune évaluation enregistrée pour cette classe.")
+    st.stop()
+
+  date_choisie = st.sidebar.selectbox("Choisir une date d'évaluation", dates_disponibles)
+
+  df = recuperer_donnees_prediction(classe_choisie, date_choisie)
+
+  if df.empty:
+    st.warning("Aucune donnée trouvée pour cette classe et cette date.")
+    st.stop()
+
+  colonne_nom = "Nom"
+  cols_notes = [col for col in df.columns if col not in ("Nom", "Absences")]
+  avec_absences_db = "Absences" in df.columns
+
+  if not cols_notes:
+    st.warning("Aucune colonne de note trouvée pour cette classe et cette date.")
+    st.stop()
+
+  if avec_absences_db:
+    col_abs = "Absences"
+    seuil = st.sidebar.number_input("Veuillez entrer le seuil de réussite: ", min_value=0.0, max_value=20.0, value=10.0, key="seuil_db")
+    seuil_abs = st.sidebar.number_input("Veuillez entrer le seuil d'absence: ", min_value=0.0, value=5.0, key="seuil_abs_db")
+
+    if st.sidebar.button("Afficher", key="afficher_db"):
+      st.session_state["Afficher_pred_db"] = True
+
+    if "Afficher_pred_db" not in st.session_state:
+      st.session_state["Afficher_pred_db"] = False
+
+    if st.session_state["Afficher_pred_db"]:
+
+      df["Moyenne"] = df[cols_notes].mean(axis=1)
+
+      y = ((df["Moyenne"] >= seuil) & (df[col_abs] <= seuil_abs)).astype(int)
+      X = df[cols_notes + [col_abs]]
+
+      if y.nunique() < 2:
+        st.error("Impossible d'entraîner un modèle : tous les étudiants sont dans la même catégorie.")
+        st.stop()
+
+      X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+      model = LogisticRegression()
+      model.fit(X_train, y_train)
+
+      y_pred = model.predict(X)
+      y_pred_test = model.predict(X_test)
+
+      tab1, tab2, tab3, tab4 = st.tabs([
+          "Résultats",
+          "Corrélation",
+          "Performances",
+          "Risques"
+      ])
+
+      with tab1:
+        df_resultats = pd.DataFrame({
+              "Nom": df[colonne_nom],
+              **{col: df[col] for col in cols_notes},
+              "Moyenne": df["Moyenne"],
+              "Absences": df[col_abs],
+              "Prédiction": ["Réussite" if p == 1 else "Échec" for p in y_pred]
+        })
+
+        st.dataframe(df_resultats)
+
+        st.subheader(" Étudiants à risque d'échec :")
+        df_risque = df_resultats[df_resultats["Prédiction"] == "Échec"]
+        st.dataframe(df_risque)
+
+        precision = accuracy_score(y_test, y_pred_test)
+        st.metric("Précision du modèle (sur les données de test)", f"{round(precision * 100, 2)} %")
+
+        if st.button("Enregistrer les résultats dans la base", key="save_predictions_abs"):
+          for _, ligne in df_resultats.iterrows():
+            ajouter_prediction(ligne["Nom"], date_choisie, ligne["Moyenne"], ligne["Prédiction"])
+          st.success(f"{len(df_resultats)} résultat(s) enregistré(s).")
+
+      with tab2:
+        st.subheader("Corrélation entre absences et notes par matière")
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.heatmap(
+          df[cols_notes + [col_abs]].corr(),
+          annot=True,
+          cmap="coolwarm",
+          ax=ax
+        )
+        st.pyplot(fig)
+
+        buffer = io.BytesIO()
+        fig.savefig(buffer, format="png")
+        st.download_button(
+            label="Télécharger le graphe (format png)",
+            data=buffer.getvalue(),
+            file_name="Heatmap_db.png",
+            mime="image/png",
+            key="dl_heatmap_db"
+        )
+
+      with tab3:
+        st.subheader("Comparaison des moyennes par matière")
+
+        moyennes_par_matiere = df[cols_notes].mean()
+        matiere_faible = moyennes_par_matiere.idxmin()
+
+        st.metric("Matière la plus faible", matiere_faible,
+                f"{round(moyennes_par_matiere[matiere_faible], 2)}/20")
+
+        fig1, ax = plt.subplots()
+        ax.barh(moyennes_par_matiere.index, moyennes_par_matiere.values, color='#0B6E72', height=0.2)
+        ax.set_xlabel("Moyenne")
+        ax.axvline(x=seuil, color='red', linestyle='--', label=f'Seuil ({seuil})')
+        ax.legend()
+        fig1.tight_layout()
+        st.pyplot(fig1)
+
+        buffer1 = io.BytesIO()
+        fig1.savefig(buffer1, format="png")
+        st.download_button(
+            label="Télécharger le graphe (format png)",
+            data=buffer1.getvalue(),
+            file_name="Histogramme1_db.png",
+            mime="image/png",
+            key="dl_hist1_db_abs"
+        )
+
+
+        echecs_par_matiere = (df[cols_notes] < seuil).sum()
+        matiere_plus_dechec = echecs_par_matiere.idxmax()
+        st.metric("Matière avec le plus d'échecs", matiere_plus_dechec,
+              f"{echecs_par_matiere[matiere_plus_dechec]} étudiants en échec")
+
+        fig2, ax = plt.subplots()
+        ax.barh(echecs_par_matiere.index, echecs_par_matiere.values, color='#E63946', height=0.2)
+        ax.set_xlabel("Nombre d'échecs")
+        fig2.tight_layout()
+        st.pyplot(fig2)
+
+        buffer2 = io.BytesIO()
+        fig2.savefig(buffer2, format="png")
+        st.download_button(
+            label="Télécharger le graphe (format png)",
+            data=buffer2.getvalue(),
+            file_name="Histogramme2_db.png",
+            mime="image/png",
+            key="dl_hist2_db_abs"
+        )
+
+      with tab4:
+        st.subheader("Étudiants à double risque")
+        df_double_risque = df[
+          (df["Moyenne"] < seuil) & (df[col_abs] > seuil_abs)
+          ][[colonne_nom, "Moyenne", col_abs]]
+
+        st.metric("Nombre d'étudiants à risque", len(df_double_risque))
+        st.dataframe(df_double_risque)
+
+        if len(df_double_risque) > 0:
+            st.error(f" {len(df_double_risque)} étudiant(s) nécessitent une intervention !")
+            csv_risque = df_double_risque.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="Télécharger la liste (format csv)",
+                data=csv_risque,
+                file_name="etudiants_a_risque_db.csv",
+                mime="text/csv",
+                key="dl_risque_db"
+            )
+        else:
+            st.success("Aucun étudiant à double risque détecté !")
+
+        st.markdown("---")
+        st.subheader("Rapport complet:")
+
+        pdf_complet = FPDF()
+        pdf_complet.set_auto_page_break(True, 15)
+        pdf_complet.add_page()
+
+        pdf_complet.set_fill_color(184, 187, 146)
+        pdf_complet.rect(0, 0, 210, 60, "F")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+            tmp.write(base64.b64decode(logo_b64))
+            tmp_logo = tmp.name
+        pdf_complet.image(tmp_logo, x=140, y=0, w=50)
+        os.unlink(tmp_logo)
+        pdf_complet.set_draw_color(255, 255, 255)
+        pdf_complet.set_line_width(0.4)
+        pdf_complet.line(130, 8, 130, 52)
+        pdf_complet.set_text_color(255, 255, 255)
+        pdf_complet.set_font("Helvetica", "B", 30)
+        pdf_complet.set_xy(15, 12)
+        pdf_complet.multi_cell(110, 12, "Rapport\nPrédictif")
+        pdf_complet.set_font("Helvetica", "", 13)
+        pdf_complet.set_xy(15, 40)
+        pdf_complet.cell(100, 8, f"Classe : {classe_choisie} | Seuil notes : {seuil}/20 | Seuil absences : {seuil_abs}")
+
+        pdf_complet.ln(35)
+        y_boxes = pdf_complet.get_y()
+        pdf_complet.set_fill_color(248, 245, 238)
+        pdf_complet.rect(15, y_boxes, 85, 35, "F")
+        pdf_complet.rect(110, y_boxes, 85, 35, "F")
+        nb_reussite = len(df_resultats[df_resultats["Prédiction"] == "Réussite"])
+        nb_echec = len(df_resultats[df_resultats["Prédiction"] == "Échec"])
+
+        pdf_complet.set_xy(20, y_boxes + 5)
+        pdf_complet.set_font("Helvetica", "", 9)
+        pdf_complet.set_text_color(100, 100, 100)
+        pdf_complet.cell(75, 5, "NOMBRE D'ÉTUDIANTS", ln=True)
+        pdf_complet.set_xy(20, y_boxes + 12)
+        pdf_complet.set_font("Helvetica", "B", 22)
+        pdf_complet.set_text_color(11, 110, 114)
+        pdf_complet.cell(75, 10, str(len(df)), ln=True)
+        pdf_complet.set_xy(20, y_boxes + 24)
+        pdf_complet.set_font("Helvetica", "", 9)
+        pdf_complet.set_text_color(100, 100, 100)
+        pdf_complet.cell(75, 5, f"Réussite : {nb_reussite} | Échec : {nb_echec}")
+
+        pdf_complet.set_xy(115, y_boxes + 5)
+        pdf_complet.set_font("Helvetica", "", 9)
+        pdf_complet.set_text_color(100, 100, 100)
+        pdf_complet.cell(75, 5, "MOYENNE GÉNÉRALE", ln=True)
+        pdf_complet.set_xy(115, y_boxes + 12)
+        pdf_complet.set_font("Helvetica", "B", 22)
+        pdf_complet.set_text_color(217, 83, 79)
+        pdf_complet.cell(75, 10, str(round(df["Moyenne"].mean(), 2)), ln=True)
+        pdf_complet.set_xy(115, y_boxes + 24)
+        pdf_complet.set_font("Helvetica", "", 9)
+        pdf_complet.set_text_color(100, 100, 100)
+        pdf_complet.cell(75, 5, f"Seuil : {seuil}/20")
+        pdf_complet.ln(45)
+
+        pdf_complet.set_text_color(40, 40, 40)
+        pdf_complet.set_font("Helvetica", "B", 20)
+        pdf_complet.cell(0, 12, "À propos du rapport", ln=True)
+        pdf_complet.ln(3)
+        pdf_complet.set_font("Helvetica", "", 11)
+        pdf_complet.multi_cell(0, 7,
+                               f"Ce rapport présente une analyse prédictive des performances des étudiants "
+                               f"de la classe {classe_choisie}, évaluation du {date_choisie}. Il inclut les "
+                               f"résultats individuels, les performances par matière et les étudiants à risque."
+                               )
+        pdf_complet.ln(10)
+
+        pdf_complet.add_page()
+        pdf_complet.set_fill_color(11, 110, 114)
+        pdf_complet.rect(0, 0, 210, 6, "F")
+        pdf_complet.ln(12)
+        pdf_complet.set_text_color(40, 40, 40)
+        pdf_complet.set_font("Helvetica", "B", 16)
+        pdf_complet.cell(0, 10, "Résultats & Prédiction", ln=True)
+        pdf_complet.set_draw_color(220, 220, 220)
+        pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
+        pdf_complet.ln(8)
+
+        colonnes_res = list(df_resultats.columns)
+        largeur_col = 180 // len(colonnes_res)
+        pdf_complet.set_fill_color(11, 110, 114)
+        pdf_complet.set_text_color(255, 255, 255)
+        pdf_complet.set_font("Helvetica", "B", 8)
+        for col in colonnes_res:
+            pdf_complet.cell(largeur_col, 8, str(col)[:15], border=1, fill=True)
+        pdf_complet.ln()
+        pdf_complet.set_font("Helvetica", "", 8)
+        for i, row in df_resultats.iterrows():
+            if row.get("Prédiction") == "Réussite":
+                pdf_complet.set_fill_color(230, 244, 245)
+                pdf_complet.set_text_color(11, 110, 114)
+            else:
+                pdf_complet.set_fill_color(255, 240, 240)
+                pdf_complet.set_text_color(217, 83, 79)
+            for val in row:
+                pdf_complet.cell(largeur_col, 7,
+                                 str(round(val, 2) if isinstance(val, float) else val)[:15],
+                                 border=1, fill=True)
+            pdf_complet.ln()
+
+        pdf_complet.add_page()
+        pdf_complet.set_fill_color(11, 110, 114)
+        pdf_complet.rect(0, 0, 210, 6, "F")
+        pdf_complet.ln(12)
+        pdf_complet.set_text_color(40, 40, 40)
+        pdf_complet.set_font("Helvetica", "B", 16)
+        pdf_complet.cell(0, 10, "Performances par matière", ln=True)
+        pdf_complet.set_draw_color(220, 220, 220)
+        pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
+        pdf_complet.ln(8)
+
+        buffer_m = io.BytesIO()
+        fig1.savefig(buffer_m, format="png", bbox_inches="tight", dpi=150)
+        buffer_m.seek(0)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+            tmp.write(buffer_m.read())
+            tmp_m = tmp.name
+        pdf_complet.set_font("Helvetica", "B", 11)
+        pdf_complet.set_text_color(50, 50, 50)
+        pdf_complet.cell(0, 7, "Moyenne par matière", ln=True)
+        pdf_complet.image(tmp_m, x=15, w=180)
+        os.unlink(tmp_m)
+        pdf_complet.ln(8)
+
+        buffer_e = io.BytesIO()
+        fig2.savefig(buffer_e, format="png", bbox_inches="tight", dpi=150)
+        buffer_e.seek(0)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+            tmp.write(buffer_e.read())
+            tmp_e = tmp.name
+        pdf_complet.set_font("Helvetica", "B", 11)
+        pdf_complet.cell(0, 7, "Nombre d'échecs par matière", ln=True)
+        pdf_complet.image(tmp_e, x=15, w=180)
+        os.unlink(tmp_e)
+
+        pdf_complet.add_page()
+        pdf_complet.set_fill_color(11, 110, 114)
+        pdf_complet.rect(0, 0, 210, 6, "F")
+        pdf_complet.ln(12)
+        pdf_complet.set_text_color(40, 40, 40)
+        pdf_complet.set_font("Helvetica", "B", 16)
+        pdf_complet.cell(0, 10, "Corrélation absences / notes", ln=True)
+        pdf_complet.set_draw_color(220, 220, 220)
+        pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
+        pdf_complet.ln(8)
+
+        fig_heatmap, ax_h = plt.subplots(figsize=(10, 6))
+        sns.heatmap(df[cols_notes + [col_abs]].corr(), annot=True, cmap="RdYlGn", ax=ax_h)
+        buffer_heat = io.BytesIO()
+        fig_heatmap.savefig(buffer_heat, format="png", bbox_inches="tight", dpi=150)
+        buffer_heat.seek(0)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+            tmp.write(buffer_heat.read())
+            tmp_heat = tmp.name
+        pdf_complet.image(tmp_heat, x=15, w=180)
+        os.unlink(tmp_heat)
+        plt.close(fig_heatmap)
+
+        pdf_complet.add_page()
+        pdf_complet.set_fill_color(11, 110, 114)
+        pdf_complet.rect(0, 0, 210, 6, "F")
+        pdf_complet.ln(12)
+        pdf_complet.set_text_color(40, 40, 40)
+        pdf_complet.set_font("Helvetica", "B", 16)
+        pdf_complet.cell(0, 10, "Étudiants à double risque", ln=True)
+        pdf_complet.set_draw_color(220, 220, 220)
+        pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
+        pdf_complet.ln(8)
+
+        if len(df_double_risque) > 0:
+            cols_risque = list(df_double_risque.columns)
+            larg_r = 180 // len(cols_risque)
+            pdf_complet.set_fill_color(11, 110, 114)
+            pdf_complet.set_text_color(255, 255, 255)
+            pdf_complet.set_font("Helvetica", "B", 9)
+            for col in cols_risque:
+                pdf_complet.cell(larg_r, 8, str(col)[:20], border=1, fill=True)
+            pdf_complet.ln()
+            pdf_complet.set_font("Helvetica", "", 9)
+            for i, row in df_double_risque.iterrows():
+                pdf_complet.set_fill_color(255, 240, 240)
+                pdf_complet.set_text_color(217, 83, 79)
+                for val in row:
+                    pdf_complet.cell(larg_r, 7,
+                                     str(round(val, 2) if isinstance(val, float) else val)[:20],
+                                     border=1, fill=True)
+                    pdf_complet.ln()
+        else:
+            pdf_complet.set_font("Helvetica", "", 11)
+            pdf_complet.set_text_color(11, 110, 114)
+            pdf_complet.cell(0, 10, "Aucun étudiant à double risque détecté.", ln=True)
+
+        pdf_bytes_complet = bytes(pdf_complet.output())
+        st.download_button(
+            label="Télécharger le rapport complet (PDF)",
+            data=pdf_bytes_complet,
+            file_name="rapport_predictif_avec_absences_db.pdf",
+            mime="application/pdf",
+            key="dl_pdf_db_avec_abs"
+        )
+
+        plt.close(fig)
+        plt.close(fig1)
+        plt.close(fig2)
+
+
+
+  else:
+    seuil = st.sidebar.number_input(
+      "Veuillez entrer le seuil de réussite: ",
+      min_value=0.0, max_value=20.0, value=10.0, key="seuil_db_sans_abs"
+    )
+
+    if st.sidebar.button("Afficher", key="afficher_db_sans_abs"):
+      st.session_state["Afficher_pred_db"] = True
+
+    if "Afficher_pred_db" not in st.session_state:
+      st.session_state["Afficher_pred_db"] = False
+
+    if st.session_state["Afficher_pred_db"]:
+      df["Moyenne"] = df[cols_notes].mean(axis=1)
+      df["Statut"] = (df["Moyenne"] >= seuil).map({True: "Réussite", False: "Échec"})
+
+      tab1, tab2, tab3 = st.tabs([
+        "Résultats & Prédiction",
+        "Performances par matière",
+        "Classification par groupes"
+        ])
+
+      with tab1:
+        df_resultats = pd.DataFrame({
+              "Nom": df[colonne_nom],
+              **{col: df[col] for col in cols_notes},
+              "Moyenne": df["Moyenne"],
+              "Statut": df["Statut"],
+        })
+
+        st.dataframe(df_resultats)
+
+        if st.button("Enregistrer les résultats dans la base", key="save_predictions_sans_abs"):
+          for _, ligne in df_resultats.iterrows():
+            ajouter_prediction(ligne["Nom"], date_choisie, ligne["Moyenne"], ligne["Statut"])
+          st.success(f"{len(df_resultats)} résultat(s) enregistré(s).")
+
+      with tab2:
+        st.subheader("Comparaison des moyennes par matière: ")
+
+        moyennes_par_matiere = df[cols_notes].mean()
+        matiere_faible = moyennes_par_matiere.idxmin()
+
+        st.metric("Matière la plus faible", matiere_faible,
+                    f"{round(moyennes_par_matiere[matiere_faible], 2)}/20")
+
+        fig1, ax = plt.subplots()
+        ax.barh(moyennes_par_matiere.index, moyennes_par_matiere.values, color='#0B6E72', height=0.2)
+        ax.set_xlabel("Moyenne")
+        ax.axvline(x=seuil, color='red', linestyle='--', label=f'Seuil ({seuil})')
+        ax.legend()
+        fig1.tight_layout()
+        st.pyplot(fig1)
+
+        buffer1 = io.BytesIO()
+        fig1.savefig(buffer1, format="png")
+        st.download_button(
+            label="Télécharger le graphe (format png)",
+            data=buffer1.getvalue(),
+            file_name="Histogramme1_db.png",
+            mime="image/png",
+            key="dl_hist1_db_sans_abs"
+        )
+
+        echecs_par_matiere = (df[cols_notes] < seuil).sum()
+        matiere_plus_dechec = echecs_par_matiere.idxmax()
+        st.metric("Matière avec le plus d'échecs", matiere_plus_dechec,
+                    f"{echecs_par_matiere[matiere_plus_dechec]} étudiants en échec")
+
+        fig2, ax = plt.subplots()
+        ax.barh(echecs_par_matiere.index, echecs_par_matiere.values, color='#0B6E72', height=0.2)
+        ax.set_xlabel("Nombre d'échecs")
+        fig2.tight_layout()
+        st.pyplot(fig2)
+
+        buffer2 = io.BytesIO()
+        fig2.savefig(buffer2, format="png")
+        st.download_button(
+            label="Télécharger le graphe (format png)",
+            data=buffer2.getvalue(),
+            file_name="Histogramme2_db.png",
+            mime="image/png",
+            key="dl_hist2_db_sans_abs"
+        )
+
+      with tab3:
+          n_clusters = min(3, df["Moyenne"].nunique())
+          kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+          kmeans.fit(df[["Moyenne"]])
+          df["Groupe"] = kmeans.labels_
+
+          moyennes_groupes = df.groupby("Groupe")["Moyenne"].mean().sort_values()
+
+          if n_clusters == 3:
+              noms_profils = ["En difficulté", "Moyen", "Excellent"]
+          elif n_clusters == 2:
+              noms_profils = ["En difficulté", "Excellent"]
+          else:
+              noms_profils = ["Excellent"]
+          labels = {moyennes_groupes.index[i]: noms_profils[i] for i in range(n_clusters)}
+
+          df["Profil"] = df["Groupe"].map(labels)
+
+          st.dataframe(df[[colonne_nom, "Moyenne", "Profil"]])
+
+          count = df["Profil"].value_counts()
+
+          color_map = {
+              "Excellent": '#0B6E72',
+              "Moyen": '#F4A261',
+              "En difficulté": '#E63946'
+          }
+          colors = [color_map[label] for label in count.index]
+
+          fig3, ax = plt.subplots()
+          ax.pie(count, labels=count.index, autopct='%1.1f%%', colors=colors)
+          st.pyplot(fig3)
+
+          buffer3 = io.BytesIO()
+          fig3.savefig(buffer3, format="png")
+          st.download_button(
+              label="Télécharger le graphe (format png)",
+              data=buffer3.getvalue(),
+              file_name="Classement_db.png",
+              mime="image/png",
+              key="dl_classement_db"
+          )
+
+          st.subheader("Statistiques par groupe: ")
+          st.dataframe(df.groupby("Profil")["Moyenne"].agg(['mean', 'count', 'min', 'max'])
+                       .rename(columns={'mean': 'Moyenne', 'count': 'Nombre',
+                                        'min': 'Min', 'max': 'Max'}))
+
+          st.markdown("---")
+          st.subheader("Rapport complet:")
+
+          pdf_complet = FPDF()
+          pdf_complet.set_auto_page_break(True, 15)
+          pdf_complet.add_page()
+
+          pdf_complet.set_fill_color(184, 187, 146)
+          pdf_complet.rect(0, 0, 210, 60, "F")
+          with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+              tmp.write(base64.b64decode(logo_b64))
+              tmp_logo = tmp.name
+          pdf_complet.image(tmp_logo, x=140, y=0, w=50)
+          os.unlink(tmp_logo)
+          pdf_complet.set_draw_color(255, 255, 255)
+          pdf_complet.set_line_width(0.4)
+          pdf_complet.line(130, 8, 130, 52)
+          pdf_complet.set_text_color(255, 255, 255)
+          pdf_complet.set_font("Helvetica", "B", 30)
+          pdf_complet.set_xy(15, 12)
+          pdf_complet.multi_cell(110, 12, "Rapport\nPrédictif")
+          pdf_complet.set_font("Helvetica", "", 13)
+          pdf_complet.set_xy(15, 40)
+          pdf_complet.cell(100, 8, f"Classe : {classe_choisie} | Seuil de réussite : {seuil}/20")
+
+          pdf_complet.ln(35)
+          y_boxes = pdf_complet.get_y()
+          pdf_complet.set_fill_color(248, 245, 238)
+          pdf_complet.rect(15, y_boxes, 85, 35, "F")
+          pdf_complet.rect(110, y_boxes, 85, 35, "F")
+          nb_reussite = len(df[df["Statut"] == "Réussite"])
+          nb_echec = len(df[df["Statut"] == "Échec"])
+
+          pdf_complet.set_xy(20, y_boxes + 5)
+          pdf_complet.set_font("Helvetica", "", 9)
+          pdf_complet.set_text_color(100, 100, 100)
+          pdf_complet.cell(75, 5, "NOMBRE D'ÉTUDIANTS", ln=True)
+          pdf_complet.set_xy(20, y_boxes + 12)
+          pdf_complet.set_font("Helvetica", "B", 22)
+          pdf_complet.set_text_color(11, 110, 114)
+          pdf_complet.cell(75, 10, str(len(df)), ln=True)
+          pdf_complet.set_xy(20, y_boxes + 24)
+          pdf_complet.set_font("Helvetica", "", 9)
+          pdf_complet.set_text_color(100, 100, 100)
+          pdf_complet.cell(75, 5, f"Réussite : {nb_reussite} | Échec : {nb_echec}")
+
+          pdf_complet.set_xy(115, y_boxes + 5)
+          pdf_complet.set_font("Helvetica", "", 9)
+          pdf_complet.set_text_color(100, 100, 100)
+          pdf_complet.cell(75, 5, "MOYENNE GÉNÉRALE", ln=True)
+          pdf_complet.set_xy(115, y_boxes + 12)
+          pdf_complet.set_font("Helvetica", "B", 22)
+          pdf_complet.set_text_color(217, 83, 79)
+          pdf_complet.cell(75, 10, str(round(df["Moyenne"].mean(), 2)), ln=True)
+          pdf_complet.set_xy(115, y_boxes + 24)
+          pdf_complet.set_font("Helvetica", "", 9)
+          pdf_complet.set_text_color(100, 100, 100)
+          pdf_complet.cell(75, 5, f"Seuil : {seuil}/20")
+          pdf_complet.ln(45)
+
+          pdf_complet.set_text_color(40, 40, 40)
+          pdf_complet.set_font("Helvetica", "B", 20)
+          pdf_complet.cell(0, 12, "À propos du rapport", ln=True)
+          pdf_complet.ln(3)
+          pdf_complet.set_font("Helvetica", "", 11)
+          pdf_complet.multi_cell(0, 7,
+                                 f"Ce rapport présente une analyse prédictive des performances des étudiants "
+                                 f"de la classe {classe_choisie}, évaluation du {date_choisie}. Il inclut les "
+                                 f"résultats individuels, les performances par matière et la classification par profil."
+                                 )
+          pdf_complet.ln(10)
+
+          pdf_complet.add_page()
+          pdf_complet.set_fill_color(11, 110, 114)
+          pdf_complet.rect(0, 0, 210, 6, "F")
+          pdf_complet.ln(12)
+          pdf_complet.set_text_color(40, 40, 40)
+          pdf_complet.set_font("Helvetica", "B", 16)
+          pdf_complet.cell(0, 10, "Résultats & Prédiction", ln=True)
+          pdf_complet.set_draw_color(220, 220, 220)
+          pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
+          pdf_complet.ln(8)
+
+          colonnes_res = list(df_resultats.columns)
+          largeur_col = 180 // len(colonnes_res)
+          pdf_complet.set_fill_color(11, 110, 114)
+          pdf_complet.set_text_color(255, 255, 255)
+          pdf_complet.set_font("Helvetica", "B", 8)
+          for col in colonnes_res:
+              pdf_complet.cell(largeur_col, 8, str(col)[:15], border=1, fill=True)
+          pdf_complet.ln()
+          pdf_complet.set_font("Helvetica", "", 8)
+          for i, row in df_resultats.iterrows():
+              if row.get("Statut") == "Réussite":
+                  pdf_complet.set_fill_color(230, 244, 245)
+                  pdf_complet.set_text_color(11, 110, 114)
+              else:
+                  pdf_complet.set_fill_color(255, 240, 240)
+                  pdf_complet.set_text_color(217, 83, 79)
+              for val in row:
+                  pdf_complet.cell(largeur_col, 7,
+                                   str(round(val, 2) if isinstance(val, float) else val)[:15],
+                                   border=1, fill=True)
+              pdf_complet.ln()
+
+          pdf_complet.add_page()
+          pdf_complet.set_fill_color(11, 110, 114)
+          pdf_complet.rect(0, 0, 210, 6, "F")
+          pdf_complet.ln(12)
+          pdf_complet.set_text_color(40, 40, 40)
+          pdf_complet.set_font("Helvetica", "B", 16)
+          pdf_complet.cell(0, 10, "Performances par matière", ln=True)
+          pdf_complet.set_draw_color(220, 220, 220)
+          pdf_complet.line(15, pdf_complet.get_y(), 195, pdf_complet.get_y())
+          pdf_complet.ln(8)
+
+          buffer_m = io.BytesIO()
+          fig1.savefig(buffer_m, format="png", bbox_inches="tight", dpi=150)
+          buffer_m.seek(0)
+          with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+              tmp.write(buffer_m.read())
+              tmp_m = tmp.name
+          pdf_complet.set_font("Helvetica", "B", 11)
+          pdf_complet.set_text_color(50, 50, 50)
+          pdf_complet.cell(0, 7, "Moyenne par matière", ln=True)
+          pdf_complet.image(tmp_m, x=15, w=180)
+          os.unlink(tmp_m)
+          pdf_complet.ln(8)
+
+          buffer_e = io.BytesIO()
+          fig2.savefig(buffer_e, format="png", bbox_inches="tight", dpi=150)
+          buffer_e.seek(0)
+          with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+              tmp.write(buffer_e.read())
+              tmp_e = tmp.name
+          pdf_complet.set_font("Helvetica", "B", 11)
+          pdf_complet.cell(0, 7, "Nombre d'échecs par matière", ln=True)
+          pdf_complet.image(tmp_e, x=15, w=180)
+          os.unlink(tmp_e)
+
           pdf_complet.add_page()
           pdf_complet.set_fill_color(11, 110, 114)
           pdf_complet.rect(0, 0, 210, 6, "F")
@@ -1051,7 +1810,6 @@ else:
           os.unlink(tmp_k)
           pdf_complet.ln(8)
 
-          # Tableau statistiques par groupe
           stats_groupe = df.groupby("Profil")["Moyenne"].agg(
               ['mean', 'count', 'min', 'max']
           ).rename(columns={
@@ -1063,7 +1821,6 @@ else:
           pdf_complet.cell(0, 7, "Statistiques par groupe", ln=True)
           pdf_complet.ln(4)
 
-          # En-tete tableau groupes
           cols_groupe = list(stats_groupe.columns)
           larg = 180 // len(cols_groupe)
           pdf_complet.set_fill_color(11, 110, 114)
@@ -1073,7 +1830,6 @@ else:
               pdf_complet.cell(larg, 8, str(col), border=1, fill=True)
           pdf_complet.ln()
 
-          # Lignes tableau groupes
           color_map_pdf = {
               "Excellent": (230, 244, 245),
               "Moyen": (255, 248, 225),
@@ -1095,10 +1851,16 @@ else:
           st.download_button(
               label="Télécharger le rapport complet (PDF)",
               data=pdf_bytes_complet,
-              file_name="rapport_predictif_sans_absences.pdf",
-              mime="application/pdf"
+              file_name="rapport_predictif_sans_absences_db.pdf",
+              mime="application/pdf",
+              key="dl_pdf_db_sans_abs"
           )
 
           plt.close(fig1)
           plt.close(fig2)
           plt.close(fig3)
+
+
+if st.sidebar.button("Déconnexion"):
+    st.session_state["mot_de_passe_correct"] = False
+    st.rerun()
