@@ -400,7 +400,7 @@ if source == "Fichier (upload)":
           pdf_complet.set_xy(15, 40)
           pdf_complet.cell(100, 8, f"Seuil notes : {seuil}/20 | Seuil absences : {seuil_abs}")
 
-          # ── Encadrés statistiques ────────────────────────────
+          # ── statistiques ────────────────────────────
           pdf_complet.ln(35)
           y_boxes = pdf_complet.get_y()
           pdf_complet.set_fill_color(248, 245, 238)
@@ -449,7 +449,7 @@ if source == "Fichier (upload)":
                                  )
           pdf_complet.ln(10)
 
-          # ── Page 2 : Résultats ────────────────────────────────
+          # ── Page 2 : Resultats ────────────────────────────────
           pdf_complet.add_page()
           pdf_complet.set_fill_color(11, 110, 114)
           pdf_complet.rect(0, 0, 210, 6, "F")
@@ -483,7 +483,7 @@ if source == "Fichier (upload)":
                                    border=1, fill=True)
               pdf_complet.ln()
 
-          # ── Page 3 : Performances par matière ────────────────
+          # ── Page 3 : Performances par matiere ────────────────
           pdf_complet.add_page()
           pdf_complet.set_fill_color(11, 110, 114)
           pdf_complet.rect(0, 0, 210, 6, "F")
@@ -519,7 +519,7 @@ if source == "Fichier (upload)":
           pdf_complet.image(tmp_e, x=15, w=180)
           os.unlink(tmp_e)
 
-          # ── Page 4 : Corrélation ─────────────────────────────
+          # ── Page 4 : Correlation ─────────────────────────────
           pdf_complet.add_page()
           pdf_complet.set_fill_color(11, 110, 114)
           pdf_complet.rect(0, 0, 210, 6, "F")
@@ -544,7 +544,7 @@ if source == "Fichier (upload)":
           os.unlink(tmp_heat)
           plt.close(fig_heatmap)
 
-          # ── Page 5 : Étudiants à double risque ───────────────
+          # ── Page 5 : Etudiants à double risque ───────────────
           pdf_complet.add_page()
           pdf_complet.set_fill_color(11, 110, 114)
           pdf_complet.rect(0, 0, 210, 6, "F")
@@ -611,10 +611,10 @@ if source == "Fichier (upload)":
           colonnes_disponibles
       )
 
-      # ── Nettoyage et validation des données ──────────────
+      # ── Nettoyage des donnees ──────────────
 
       # Convertir les colonnes en numérique
-      # les valeurs texte → NaN automatiquement
+      # les valeurs texte => NaN automatiquement
       for col in cols_notes:
           df[col] = pd.to_numeric(df[col], errors='coerce')
 
@@ -623,7 +623,7 @@ if source == "Fichier (upload)":
       if nbr_texte > 0:
           st.sidebar.warning(f"{nbr_texte} cellule(s) contenant du texte détectée(s)")
 
-      # Valeurs manquantes (NaN originaux + textes convertis)
+
       remplacer = ""
       if nbr_texte != 0:
           remplacer = st.sidebar.selectbox("Comment souhaitez-vous traiter les valeurs manquantes ?",
@@ -640,7 +640,7 @@ if source == "Fichier (upload)":
       elif remplacer == "Supprimer la ligne":
           df = df.dropna(subset=cols_notes)
 
-      # Valeurs aberrantes (hors 0-20)
+      # Valeurs aberrantes
       for col in cols_notes:
           aberrantes = ((df[col] < 0) | (df[col] > 20)).sum()
           if aberrantes > 0:
@@ -732,7 +732,7 @@ if source == "Fichier (upload)":
           pdf_res.rect(15, y_boxes, 85, 35, "F")
           pdf_res.rect(110, y_boxes, 85, 35, "F")
 
-          # Encadré gauche
+
           pdf_res.set_xy(20, y_boxes + 5)
           pdf_res.set_font("Helvetica", "", 9)
           pdf_res.set_text_color(100, 100, 100)
@@ -742,7 +742,7 @@ if source == "Fichier (upload)":
           pdf_res.set_text_color(11, 110, 114)
           pdf_res.cell(75, 10, str(len(df_resultats)), ln=True)
 
-          # Encadré droit
+
           pdf_res.set_xy(115, y_boxes + 5)
           pdf_res.set_font("Helvetica", "", 9)
           pdf_res.set_text_color(100, 100, 100)
@@ -761,7 +761,7 @@ if source == "Fichier (upload)":
           pdf_res.line(15, pdf_res.get_y(), 195, pdf_res.get_y())
           pdf_res.ln(8)
 
-          # En-tête tableau
+
           colonnes = list(df_resultats.columns)
           largeur_col = 180 // len(colonnes)
 
@@ -772,7 +772,7 @@ if source == "Fichier (upload)":
               pdf_res.cell(largeur_col, 8, str(col)[:15], border=1, fill=True)
           pdf_res.ln()
 
-          # Lignes tableau
+
           pdf_res.set_font("Helvetica", "", 8)
           for i, row in df_resultats.iterrows():
               statut = row.get("Statut", row.get("Prédiction", ""))
@@ -928,7 +928,7 @@ if source == "Fichier (upload)":
             pdf_complet.set_xy(15, 40)
             pdf_complet.cell(100, 8, f"Seuil de réussite : {seuil}/20")
 
-            # ── Encadrés statistiques ────────────────────────────
+            # ── Encadres statistiques ────────────────────────────
             pdf_complet.ln(35)
             y_boxes = pdf_complet.get_y()
             pdf_complet.set_fill_color(248, 245, 238)
@@ -977,7 +977,7 @@ if source == "Fichier (upload)":
                                    )
             pdf_complet.ln(10)
 
-            # ── Page 2 : Résultats ────────────────────────────────
+            # ── Page 2 : Resultats ────────────────────────────────
             pdf_complet.add_page()
             pdf_complet.set_fill_color(11, 110, 114)
             pdf_complet.rect(0, 0, 210, 6, "F")
@@ -1011,7 +1011,7 @@ if source == "Fichier (upload)":
                                      border=1, fill=True)
                 pdf_complet.ln()
 
-            # ── Page 3 : Performances par matière ────────────────
+            # ── Page 3 : Performances par matiere ────────────────
             pdf_complet.add_page()
             pdf_complet.set_fill_color(11, 110, 114)
             pdf_complet.rect(0, 0, 210, 6, "F")

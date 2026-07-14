@@ -9,6 +9,7 @@ from db import (
     recuperer_predictions
 )
 from login import check_password
+
 check_password()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

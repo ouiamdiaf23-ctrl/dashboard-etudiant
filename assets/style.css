@@ -1,11 +1,6 @@
-/* ============================================================
-   SUPMTI DASHBOARD — Style Élégant & Professionnel
-   Palette inspirée du logo : Teal #0B6E72, Blanc, Gris clair
-   ============================================================ */
-
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap');
 
-/* ─── Variables ─────────────────────────────────────────── */
+
 :root {
   --teal:         #0B6E72;
   --teal-mid:     #138A8F;
@@ -22,7 +17,7 @@
   --radius-sm:    8px;
 }
 
-/* ─── Base ──────────────────────────────────────────────── */
+
 html, body, [class*="css"] {
   font-family: 'Inter', sans-serif;
   color: var(--text);
@@ -32,7 +27,7 @@ html, body, [class*="css"] {
   background: var(--bg);
 }
 
-/* Entrée douce de la page */
+
 .main .block-container {
   padding: 2rem 2.5rem;
   animation: pageIn .5s ease both;
@@ -43,7 +38,7 @@ html, body, [class*="css"] {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ─── Typographie ───────────────────────────────────────── */
+
 h1 {
   font-family: 'DM Sans', sans-serif;
   font-size: 2rem;
@@ -61,13 +56,13 @@ h2, h3 {
 
 p { color: var(--text-muted); line-height: 1.75; }
 
-/* ─── Sidebar ───────────────────────────────────────────── */
+
 [data-testid="stSidebar"] {
   background: var(--teal);
   border-right: 1px solid rgba(255,255,255,.12);
 }
 
-/* Titres et labels sidebar */
+
 [data-testid="stSidebar"] label,
 [data-testid="stSidebar"] p,
 [data-testid="stSidebar"] span,
@@ -79,7 +74,7 @@ p { color: var(--text-muted); line-height: 1.75; }
   font-weight: 500;
 }
 
-/* Inputs de la sidebar — fond blanc, texte sombre */
+
 [data-testid="stSidebar"] input {
   background: rgba(255,255,255,.96) !important;
   color: var(--text) !important;
@@ -98,14 +93,14 @@ p { color: var(--text-muted); line-height: 1.75; }
   color: var(--text) !important;
 }
 
-/* Tags multiselect */
+
 [data-baseweb="tag"] {
   background: var(--teal-mid) !important;
   color: white !important;
   border-radius: 20px !important;
 }
 
-/* File uploader dans la sidebar */
+
 [data-testid="stSidebar"] [data-testid="stFileUploader"] {
   background: rgba(255,255,255,.10);
   border-radius: var(--radius-sm);
@@ -134,12 +129,12 @@ p { color: var(--text-muted); line-height: 1.75; }
   color: var(--teal) !important;
 }
 
-/* Séparateur sidebar */
+
 [data-testid="stSidebar"] hr {
   border-color: rgba(255,255,255,.15);
 }
 
-/* ─── Bouton principal ──────────────────────────────────── */
+
 .stButton > button {
   background: var(--teal);
   color: white;
@@ -159,7 +154,7 @@ p { color: var(--text-muted); line-height: 1.75; }
   box-shadow: var(--shadow-md);
 }
 
-/* Bouton sidebar */
+
 [data-testid="stSidebar"] .stButton > button {
   background: rgba(255,255,255,.18);
   color: white;
@@ -172,7 +167,7 @@ p { color: var(--text-muted); line-height: 1.75; }
   color: var(--teal);
 }
 
-/* ─── Bouton téléchargement ─────────────────────────────── */
+
 .stDownloadButton > button {
   background: var(--teal-light);
   color: var(--teal);
@@ -190,7 +185,7 @@ p { color: var(--text-muted); line-height: 1.75; }
   border-color: var(--teal);
 }
 
-/* ─── Inputs ────────────────────────────────────────────── */
+
 .stTextInput input,
 .stNumberInput input,
 textarea {
@@ -210,7 +205,7 @@ textarea:focus {
   outline: none !important;
 }
 
-/* ─── Selectbox ─────────────────────────────────────────── */
+
 .stSelectbox div[data-baseweb="select"] > div {
   background: var(--surface) !important;
   border: 1.5px solid var(--border) !important;
@@ -223,12 +218,12 @@ textarea:focus {
   border-color: var(--teal) !important;
 }
 
-/* ─── Slider ────────────────────────────────────────────── */
+
 .stSlider [data-baseweb="slider"] > div > div {
   background: var(--teal) !important;
 }
 
-/* ─── Métriques KPI ─────────────────────────────────────── */
+
 [data-testid="metric-container"] {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -258,7 +253,7 @@ textarea:focus {
   color: var(--teal) !important;
 }
 
-/* ─── Tabs ──────────────────────────────────────────────── */
+
 .stTabs [data-baseweb="tab-list"] {
   gap: 6px;
   border-bottom: 2px solid var(--border);
@@ -288,7 +283,7 @@ textarea:focus {
   font-weight: 600 !important;
 }
 
-/* ─── Dataframe / Tableau ───────────────────────────────── */
+
 [data-testid="stDataFrame"] {
   border-radius: var(--radius);
   overflow: hidden;
@@ -301,7 +296,7 @@ thead th { color: white !important; font-weight: 600 !important; }
 tbody tr:nth-child(even) { background: #F3F9F9; }
 tbody tr:hover { background: var(--teal-light) !important; }
 
-/* ─── Expander ──────────────────────────────────────────── */
+
 .streamlit-expanderHeader {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -319,7 +314,7 @@ tbody tr:hover { background: var(--teal-light) !important; }
   padding: 1rem;
 }
 
-/* ─── Messages ──────────────────────────────────────────── */
+
 .stSuccess {
   background: #EAF7F0 !important;
   border-left: 5px solid #2E8B57 !important;
@@ -344,13 +339,13 @@ tbody tr:hover { background: var(--teal-light) !important; }
   border-radius: var(--radius-sm);
 }
 
-/* ─── Graphiques Matplotlib ─────────────────────────────── */
+
 .element-container img {
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
 }
 
-/* ─── File uploader (zone principale) ──────────────────── */
+
 [data-testid="stFileUploaderDropzone"] {
   background: var(--surface) !important;
   border: 2px dashed var(--border) !important;
@@ -363,7 +358,7 @@ tbody tr:hover { background: var(--teal-light) !important; }
   background: var(--teal-light) !important;
 }
 
-/* ─── Scrollbar ─────────────────────────────────────────── */
+
 ::-webkit-scrollbar { width: 7px; height: 7px; }
 ::-webkit-scrollbar-thumb {
   background: var(--border);
@@ -371,7 +366,7 @@ tbody tr:hover { background: var(--teal-light) !important; }
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--teal-mid); }
 
-/* ─── Séparateurs ───────────────────────────────────────── */
+
 hr {
   border: none;
   height: 1px;
@@ -379,10 +374,10 @@ hr {
   margin: 1.5rem 0;
 }
 
-/* ─── Logo image ────────────────────────────────────────── */
+
 img { border-radius: var(--radius-sm); }
 
-/* ─── Responsive ────────────────────────────────────────── */
+
 @media (max-width: 768px) {
   .main .block-container { padding: 1rem; }
   h1 { font-size: 1.5rem; }
@@ -393,7 +388,7 @@ img { border-radius: var(--radius-sm); }
   * { animation: none !important; transition: none !important; }
 }
 
-/* Supprimer le rectangle du logo */
+
 [data-testid="stImage"] img,
 .element-container img {
     background: transparent !important;
@@ -402,7 +397,7 @@ img { border-radius: var(--radius-sm); }
     border: none !important;
 }
 
-/* Animation élégante */
+
 .main .block-container {
     animation: elegantFade .7s cubic-bezier(.25,.46,.45,.94) both;
 }
@@ -412,7 +407,7 @@ img { border-radius: var(--radius-sm); }
     to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Bouton upload - couleur compatible avec le teal */
+
 [data-testid="stFileUploader"] button {
     background: #0B6E72 !important;
     color: white !important;
@@ -426,7 +421,7 @@ img { border-radius: var(--radius-sm); }
     color: white !important;
 }
 
-/* Sidebar bouton upload */
+
 [data-testid="stSidebar"] [data-testid="stFileUploader"] button {
     background: rgba(255,255,255,.25) !important;
     color: white !important;

@@ -73,7 +73,7 @@ if fichier is not None:
         st.error(f"Impossible de lire le fichier : {e}")
         st.stop()
 
-    # L'admin choisit la colonne représentant la valeur à analyser
+    # L'admin choisit la colonne representant la valeur a analyser
     colonne_valeur = st.sidebar.selectbox("Quelle colonne représente les valeurs à analyser ?", df.columns)
 
     # L'admin choisit la colonne contenant les noms/identifiants
@@ -92,7 +92,7 @@ if fichier is not None:
 
     if choix == "Moyennes":
 
-        # les valeurs texte → NaN automatiquement
+        # les valeurs texte => NaN automatiquement
         df[colonne_valeur] = pd.to_numeric(df[colonne_valeur], errors='coerce')
 
         # Compter les cellules texte converties en NaN
@@ -130,7 +130,7 @@ if fichier is not None:
             mime="text/csv"
         )
 
-        #Base de donnee
+        # Base de donnee
         date_eval = st.sidebar.date_input("Date de cette évaluation")
         classe_etudiants = st.sidebar.text_input("Classe (ex: DS3A)")
 
@@ -234,9 +234,6 @@ if fichier is not None:
             pdf.set_auto_page_break(True, 15)
             pdf.add_page()
 
-            # ====================================================
-            # HEADER VERT (inchangé)
-            # ====================================================
             pdf.set_fill_color(184, 187, 146)
             pdf.rect(0, 0, 210, 60, "F")
 
@@ -259,9 +256,7 @@ if fichier is not None:
             pdf.set_xy(15, 40)
             pdf.cell(100, 8, "Dashboard d'analyse des notes")
 
-            # ====================================================
-            # À propos du rapport
-            # ====================================================
+
             pdf.ln(35)
             pdf.set_text_color(40, 40, 40)
             pdf.set_font("Helvetica", "B", 20)
@@ -276,9 +271,7 @@ if fichier is not None:
             pdf.multi_cell(0, 7, texte)
             pdf.ln(10)
 
-            # ====================================================
-            # Statistiques dans les encadrés
-            # ====================================================
+
             y_boxes = pdf.get_y()
 
             pdf.set_fill_color(248, 245, 238)
@@ -315,9 +308,6 @@ if fichier is not None:
 
             pdf.ln(45)
 
-            # ====================================================
-            # Statistiques générales (titre + ligne)
-            # ====================================================
             pdf.set_text_color(40, 40, 40)
             pdf.set_font("Helvetica", "B", 18)
             pdf.cell(0, 10, "Statistiques générales", ln=True)
@@ -353,12 +343,8 @@ if fichier is not None:
 
             pdf.ln(20)
 
-            # ====================================================
-            # Visualisations — Page 2
-            # ====================================================
             pdf.add_page()
 
-            # Bande teal fine en haut
             pdf.set_fill_color(11, 110, 114)
             pdf.rect(0, 0, 210, 6, "F")
             pdf.ln(12)
@@ -555,7 +541,7 @@ if fichier is not None:
             pdf_abs.set_xy(15, 40)
             pdf_abs.cell(100, 8, "Analyse des absences des étudiants")
 
-            # Encadrés
+            # Encadres
             pdf_abs.ln(35)
             y_boxes = pdf_abs.get_y()
             pdf_abs.set_fill_color(248, 245, 238)
